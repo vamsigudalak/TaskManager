@@ -39,11 +39,10 @@ describe('Todo App core flows', () => {
       ).toBeTruthy();
     });
 
+    fireEvent.press(screen.getByText('Filter: All'));
     const missedLabels = screen.getAllByText('Missed');
     fireEvent.press(missedLabels[missedLabels.length - 1]);
-    fireEvent.press(screen.getByText('Priority'));
-
-    expect(screen.getByText('Missed first')).toBeTruthy();
+    expect(screen.getByText('Filter: Missed')).toBeTruthy();
   });
 
   test('adds a new task through inputs and create button', async () => {
