@@ -136,6 +136,8 @@ const getCalendarDays = (year: number, month: number) => {
 };
 type AppPalette = {
   gradient: string[];
+  buttonGradient: string[];
+  buttonColor: string;
   textPrimary: string;
   textSecondary: string;
   surface: string;
@@ -189,11 +191,13 @@ const darkTheme = {
 
 const LIGHT_PALETTE: AppPalette = {
   gradient: ['#EEF4FF', '#F5F3FF', '#FFF7ED'],
+  buttonGradient: ['#6366F1', '#8B5CF6'],
+  buttonColor: '#6366F1',
   textPrimary: '#1E1B4B',
   textSecondary: '#64748B',
   surface: 'rgba(255, 255, 255, 0.96)',
   surfaceAlt: '#FFFFFF',
-  border: 'rgba(219, 228, 255, 0.95)',
+  border: 'rgba(196, 181, 253, 0.72)',
   inputBg: '#F8FAFC',
   cardGlow: 'rgba(125, 211, 252, 0.15)',
   statusBar: 'dark-content',
@@ -207,11 +211,13 @@ const LIGHT_PALETTE: AppPalette = {
 
 const DARK_PALETTE: AppPalette = {
   gradient: ['#020617', '#111827', '#1E1B4B'],
+  buttonGradient: ['#22D3EE', '#8B5CF6'],
+  buttonColor: '#22D3EE',
   textPrimary: '#F8FAFC',
   textSecondary: '#94A3B8',
   surface: 'rgba(15, 23, 42, 0.92)',
   surfaceAlt: '#111827',
-  border: 'rgba(71, 85, 105, 0.85)',
+  border: 'rgba(34, 211, 238, 0.44)',
   inputBg: '#0F172A',
   cardGlow: 'rgba(59, 130, 246, 0.12)',
   statusBar: 'light-content',
@@ -843,7 +849,7 @@ function HomeScreen({
                       borderless
                     >
                       <LinearGradient
-                        colors={['#7C3AED', '#A855F7']}
+                        colors={palette.buttonGradient}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.actionButton}
@@ -858,7 +864,7 @@ function HomeScreen({
                     borderless
                   >
                     <LinearGradient
-                      colors={['#F97316', '#EF4444']}
+                      colors={palette.buttonGradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.actionButton}
@@ -2130,7 +2136,7 @@ function AddTaskScreen({
                             styles.timePickerConfirmButton,
                           ]}
                           labelStyle={styles.timePickerButtonLabel}
-                          buttonColor="#4F46E5"
+                          buttonColor={palette.buttonColor}
                         >
                           Done
                         </Button>
@@ -2230,7 +2236,7 @@ function AddTaskScreen({
                             styles.timePickerConfirmButton,
                           ]}
                           labelStyle={styles.timePickerButtonLabel}
-                          buttonColor="#4F46E5"
+                          buttonColor={palette.buttonColor}
                         >
                           Done
                         </Button>
@@ -2255,7 +2261,7 @@ function AddTaskScreen({
                     disabled={!canSave}
                     style={[styles.button, styles.saveButton]}
                     labelStyle={styles.buttonLabel}
-                    buttonColor="#4F46E5"
+                    buttonColor={palette.buttonColor}
                   >
                     {editingTask ? 'Save' : 'Create'}
                   </Button>

@@ -1,0 +1,125 @@
+{
+  "splash": {
+    "title": "Vamsi's Tasks",
+    "subtitle": "Stay focused & productive"
+  },
+  "home": {
+    "title": "Daily Taasks",
+    "subtitle": "Stay organized & focused",
+    "stats": {
+      "total": "Total",
+      "done": "Done",
+      "missed": "Missed",
+      "today": "Today",
+      "upcoming": "Upcoming"
+    },
+    "searchPlaceholder": "Search tasks, category, priority",
+    "filters": ["All", "Today", "Live", "Missed"],
+    "sort": ["Nearest time", "Newest", "Priority", "Missed first"],
+    "status": {
+      "done": "Done",
+      "missed": "Missed",
+      "live": "Live"
+    },
+    "actions": {
+      "undo": "Undo",
+      "done": "Done",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "empty": {
+      "none": "No tasks yet",
+      "noMatch": "No matching open tasks",
+      "noneHint": "Tap the + button to create your first task!",
+      "noMatchHint": "Try a different filter to see more tasks."
+    },
+    "completed": "Completed",
+    "dateTimePicker": {
+      "title": "Date & Time Picker",
+      "timeLabel": "Time:",
+      "close": "Close"
+    }
+  },
+  "task": {
+    "newTitle": "New Task",
+    "editTitle": "Edit Task",
+    "labels": {
+      "title": "Task Title *",
+      "description": "Description",
+      "date": "Date",
+      "priority": "Priority",
+      "category": "Category"
+    },
+    "placeholders": {
+      "title": "What needs to be done?",
+      "description": "Add more details (optional)",
+      "timeUnset": "\u23f0 Set time (optional)"
+    },
+    "dateSubtitle": "Schedule any day this year",
+    "buttons": {
+      "cancel": "Cancel",
+      "done": "Done",
+      "create": "Create",
+      "save": "Save"
+    },
+    "pickers": {
+      "selectDate": "Select Date",
+      "selectTime": "Select Time"
+    },
+    "alerts": {
+      "futureTimeTitle": "Choose a future time",
+      "futureTimeMessage": "Reminder time must be later than the current time."
+    }
+  },
+  "notifications": {
+    "alarmAccessNeeded": "Alarm access needed",
+    "notificationsOff": "Notifications are off",
+    "alarmAccessMessage": "Enable Alarms & reminders in Android settings so reminders can fire while the app is closed.",
+    "notificationsOffMessage": "Enable notifications for this app, otherwise reminders and test alerts cannot appear.",
+    "openAlarmSettings": "Open Alarm Settings",
+    "openNotificationSettings": "Open Notification Settings",
+    "channelName": "Task Reminders",
+    "title": "Task Reminder",
+    "markDone": "Mark Done",
+    "snooze10": "Snooze 10m",
+    "exactAlarmFallback": "Exact alarm unavailable, using standard scheduled notification."
+  },
+  "calendar": {
+    "longMonths": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
+    "shortMonths": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ],
+    "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "weekdayInitials": ["S", "M", "T", "W", "T", "F", "S"]
+  },
+  "taskDefaults": {
+    "priority": "Medium",
+    "category": "Personal",
+    "priorityOptions": ["High", "Medium", "Low"],
+    "categoryOptions": ["Work", "Personal", "Health", "Study", "Other"]
+  }
+}
