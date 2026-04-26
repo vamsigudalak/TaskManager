@@ -477,8 +477,8 @@ function HomeScreen({
   >('All');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showLive, setShowLive] = useState(true);
-  const [showMissed, setShowMissed] = useState(true);
+  const [showLive, setShowLive] = useState(false);
+  const [showMissed, setShowMissed] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>(
     {},
@@ -544,6 +544,13 @@ function HomeScreen({
     }, 1000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  React.useEffect(() => {
+    // Ensure section capsules start collapsed each time Home mounts.
+    setShowLive(false);
+    setShowMissed(false);
+    setShowCompleted(false);
   }, []);
 
   const getTaskState = (task: Task) => {
@@ -1340,15 +1347,11 @@ function HomeScreen({
                 placeholderTextColor="#94A3B8"
               />
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.filterScroll}
-                contentContainerStyle={styles.filterRow}
-              >
+              <View style={[styles.filterRow, styles.filterRowGrid]}>
                 <View style={styles.filterSelectWrap}>
                   <Menu
                     visible={showFilterDropdown}
+                    anchorPosition="bottom"
                     onDismiss={closeFilterPopups}
                     anchor={
                       <TouchableRipple
@@ -1367,6 +1370,8 @@ function HomeScreen({
                       >
                         <View style={styles.filterSelectRow}>
                           <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             style={[
                               styles.filterSelectLabel,
                               { color: palette.textPrimary },
@@ -1417,6 +1422,7 @@ function HomeScreen({
                 <View style={styles.filterSelectWrap}>
                   <Menu
                     visible={showPriorityDropdown}
+                    anchorPosition="bottom"
                     onDismiss={closeFilterPopups}
                     anchor={
                       <TouchableRipple
@@ -1435,6 +1441,8 @@ function HomeScreen({
                       >
                         <View style={styles.filterSelectRow}>
                           <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             style={[
                               styles.filterSelectLabel,
                               { color: palette.textPrimary },
@@ -1485,6 +1493,7 @@ function HomeScreen({
                 <View style={styles.filterSelectWrap}>
                   <Menu
                     visible={showCategoryDropdown}
+                    anchorPosition="bottom"
                     onDismiss={closeFilterPopups}
                     anchor={
                       <TouchableRipple
@@ -1503,6 +1512,8 @@ function HomeScreen({
                       >
                         <View style={styles.filterSelectRow}>
                           <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
                             style={[
                               styles.filterSelectLabel,
                               { color: palette.textPrimary },
@@ -1549,7 +1560,7 @@ function HomeScreen({
                     })}
                   </Menu>
                 </View>
-              </ScrollView>
+              </View>
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -1660,6 +1671,7 @@ function AddTaskScreen({
   );
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const pickerOpenedAtRef = React.useRef(0);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const slideAnim = React.useRef(new Animated.Value(50)).current;
   const keyboardShift = React.useRef(new Animated.Value(0)).current;
@@ -1705,6 +1717,15 @@ function AddTaskScreen({
   const closePickerPopups = () => {
     setShowDatePicker(false);
     setShowTimePicker(false);
+  };
+
+  const handlePickerOverlayPress = () => {
+    // Ignore the first tap-through immediately after opening a picker.
+    if (Date.now() - pickerOpenedAtRef.current < 180) {
+      return;
+    }
+
+    closePickerPopups();
   };
 
   const formatDateDisplay = (dateKey: string) => {
@@ -1878,6 +1899,7 @@ function AddTaskScreen({
     get12HourParts(tempHours);
 
   const handleTimeOpen = () => {
+    setShowDatePicker(false);
     const minimumTime = getMinimumSelectableTime(selectedDate);
 
     if (time) {
@@ -1896,15 +1918,22 @@ function AddTaskScreen({
       setTempHours(9);
       setTempMinutes(0);
     }
-    setShowTimePicker(true);
+    pickerOpenedAtRef.current = Date.now();
+    requestAnimationFrame(() => {
+      setShowTimePicker(true);
+    });
   };
 
   const handleDateOpen = () => {
+    setShowTimePicker(false);
     const [year, month, day] = selectedDate
       .split('-')
       .map(value => parseInt(value, 10));
     updateTempDate(year, month, day);
-    setShowDatePicker(true);
+    pickerOpenedAtRef.current = Date.now();
+    requestAnimationFrame(() => {
+      setShowDatePicker(true);
+    });
   };
 
   const calendarDays = getCalendarDays(currentYear, tempMonth);
@@ -2261,11 +2290,11 @@ function AddTaskScreen({
                 >
                   <Pressable
                     style={styles.pickerPopupOverlay}
-                    onPress={closePickerPopups}
+                    onPress={handlePickerOverlayPress}
                   >
                     <Pressable
                       style={styles.timePickerBox}
-                      onPress={() => undefined}
+                      onPress={event => event.stopPropagation()}
                     >
                       <Text style={styles.timePickerTitle}>Select Date</Text>
 
@@ -2282,7 +2311,7 @@ function AddTaskScreen({
                           >
                             <Text style={styles.calendarNavButtonText}>‹</Text>
                           </TouchableRipple>
-                          <View>
+                          <View style={styles.calendarHeaderTextWrap}>
                             <Text style={styles.calendarHeaderTitle}>
                               {monthNames[tempMonth - 1]} {currentYear}
                             </Text>
@@ -2356,9 +2385,12 @@ function AddTaskScreen({
                                 disabled={isDisabled}
                                 style={[
                                   styles.calendarDayButton,
+                                  isToday && styles.calendarDayButtonToday,
+                                  isSunday &&
+                                    !isDisabled &&
+                                    styles.calendarDayButtonSunday,
                                   isSelected &&
                                     styles.calendarDayButtonSelected,
-                                  isToday && styles.calendarDayButtonToday,
                                   isDisabled &&
                                     styles.calendarDayButtonDisabled,
                                 ]}
@@ -2369,6 +2401,9 @@ function AddTaskScreen({
                                       styles.calendarDayText,
                                       isSelected &&
                                         styles.calendarDayTextSelected,
+                                      isToday &&
+                                        !isSelected &&
+                                        styles.calendarDayTextToday,
                                       isSunday &&
                                         !isSelected &&
                                         !isDisabled &&
@@ -2406,11 +2441,11 @@ function AddTaskScreen({
                 >
                   <Pressable
                     style={styles.pickerPopupOverlay}
-                    onPress={closePickerPopups}
+                    onPress={handlePickerOverlayPress}
                   >
                     <Pressable
                       style={styles.timePickerBox}
-                      onPress={() => undefined}
+                      onPress={event => event.stopPropagation()}
                     >
                       <Text style={styles.timePickerTitle}>Select Time</Text>
 
@@ -3344,10 +3379,15 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   statsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(167, 139, 250, 0.45)',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 4,
   },
   statsContent: {
     paddingVertical: 10,
@@ -3361,15 +3401,17 @@ const styles = StyleSheet.create({
   statSeparator: {
     width: 1,
     marginVertical: 8,
-    backgroundColor: 'rgba(148, 163, 184, 0.35)',
+    backgroundColor: 'rgba(167, 139, 250, 0.35)',
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(196, 181, 253, 0.32)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
   },
   statNumber: {
     fontSize: 18,
@@ -3409,9 +3451,14 @@ const styles = StyleSheet.create({
   filterRow: {
     gap: 6,
     paddingBottom: 0,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     alignItems: 'center',
     overflow: 'visible',
+  },
+  filterRowGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   filterRowSingleLine: {
     flexWrap: 'nowrap',
@@ -3426,15 +3473,21 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 30,
     elevation: 30,
-    alignSelf: 'flex-start',
+    flex: 1,
+    minWidth: 0,
   },
   filterSelectButton: {
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    minWidth: 118,
-    minHeight: 36,
+    width: '100%',
+    minHeight: 38,
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 2,
   },
   filterSelectRow: {
     flexDirection: 'row',
@@ -3442,8 +3495,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   filterSelectLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
   filterSelectArrow: {
     fontSize: 13,
@@ -3451,20 +3505,24 @@ const styles = StyleSheet.create({
   },
   filterDropdown: {
     marginTop: 6,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    minWidth: 160,
+    minWidth: 124,
     overflow: 'hidden',
     zIndex: 40,
+    shadowColor: '#4C1D95',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
     elevation: 12,
   },
   filterDropdownOption: {
-    minHeight: 38,
+    minHeight: 40,
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   filterDropdownOptionActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
   },
   filterDropdownOptionText: {
     fontSize: 11,
@@ -3472,7 +3530,7 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   filterDropdownOptionTextActive: {
-    color: '#312E81',
+    color: '#4C1D95',
     fontWeight: '800',
   },
   filterChip: {
@@ -3524,8 +3582,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   sortChipActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
   },
   sortChipInactive: {
     backgroundColor: '#FFFFFF',
@@ -3570,14 +3628,14 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 12,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(199, 210, 254, 0.9)',
+    borderColor: 'rgba(196, 181, 253, 0.6)',
     elevation: 5,
-    shadowColor: '#312E81',
+    shadowColor: '#4F46E5',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
   },
   cardCompleted: {
     borderColor: '#86EFAC',
@@ -3660,6 +3718,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   smallTagText: {
     fontSize: 9,
@@ -3732,18 +3795,23 @@ const styles = StyleSheet.create({
     marginTop: 4,
     position: 'relative',
     zIndex: 1,
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 2,
   },
   liveSectionBox: {
-    borderColor: '#86EFAC',
-    backgroundColor: 'rgba(240, 253, 244, 0.98)',
+    borderColor: '#6EE7B7',
+    backgroundColor: 'rgba(220, 252, 231, 0.94)',
   },
   missedSectionBox: {
     borderColor: '#FCA5A5',
-    backgroundColor: 'rgba(254, 242, 242, 0.98)',
+    backgroundColor: 'rgba(254, 226, 226, 0.94)',
   },
   completedSectionBox: {
-    borderColor: '#CBD5E1',
-    backgroundColor: 'rgba(248, 250, 252, 0.98)',
+    borderColor: '#BFDBFE',
+    backgroundColor: 'rgba(239, 246, 255, 0.94)',
   },
   completedSortWrap: {
     alignItems: 'flex-end',
@@ -3758,7 +3826,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   completedListBox: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     maxHeight: 320,
     overflow: 'hidden',
@@ -3772,17 +3840,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   completedHeader: {
-    borderRadius: 18,
+    borderRadius: 20,
     zIndex: 2,
     elevation: 2,
   },
   completedHeaderContent: {
-    minHeight: 48,
+    minHeight: 50,
     paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
   },
   liveHeaderContent: {
     borderLeftWidth: 4,
@@ -3869,10 +3938,15 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
+    shadowColor: '#334155',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   statusBadgeLive: {
     backgroundColor: 'rgba(79, 70, 229, 0.08)',
@@ -3926,25 +4000,30 @@ const styles = StyleSheet.create({
   },
   metaChip: {
     borderRadius: 999,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
+    shadowColor: '#334155',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
   },
   timeChip: {
-    backgroundColor: 'rgba(79, 70, 229, 0.08)',
-    borderColor: 'rgba(99, 102, 241, 0.16)',
+    backgroundColor: 'rgba(199, 210, 254, 0.45)',
+    borderColor: 'rgba(99, 102, 241, 0.35)',
   },
   dateChip: {
-    backgroundColor: 'rgba(15, 118, 110, 0.1)',
-    borderColor: 'rgba(13, 148, 136, 0.2)',
+    backgroundColor: 'rgba(167, 243, 208, 0.45)',
+    borderColor: 'rgba(20, 184, 166, 0.3)',
   },
   countdownChip: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(254, 215, 170, 0.48)',
+    borderColor: 'rgba(249, 115, 22, 0.35)',
   },
   missedChip: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(254, 202, 202, 0.48)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   metaChipCompleted: {
     backgroundColor: 'rgba(226, 232, 240, 0.55)',
@@ -4096,14 +4175,14 @@ const styles = StyleSheet.create({
   },
   formCard: {
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     marginHorizontal: 2,
     borderWidth: 1,
-    borderColor: 'rgba(219, 228, 255, 0.95)',
-    shadowColor: '#4338CA',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    borderColor: 'rgba(199, 210, 254, 0.85)',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     elevation: 5,
     overflow: 'hidden',
   },
@@ -4144,9 +4223,14 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   calendarField: {
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 2,
   },
   calendarFieldContent: {
     minHeight: 52,
@@ -4169,10 +4253,15 @@ const styles = StyleSheet.create({
   },
   timeButton: {
     marginTop: 0,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#DBE4FF',
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    backgroundColor: 'rgba(238, 242, 255, 0.9)',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 2,
   },
   timeButtonContent: {
     minHeight: 44,
@@ -4192,19 +4281,24 @@ const styles = StyleSheet.create({
   },
   optionChip: {
     paddingHorizontal: 13,
-    minHeight: 36,
+    minHeight: 37,
     borderRadius: 999,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#334155',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
   },
   optionChipText: {
     fontSize: 11,
     fontWeight: '800',
   },
   optionChipInactive: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#DBE4FF',
+    backgroundColor: 'rgba(248, 250, 252, 0.85)',
+    borderColor: 'rgba(196, 181, 253, 0.5)',
   },
   optionChipHighSelected: {
     backgroundColor: '#EF4444',
@@ -4288,8 +4382,15 @@ const styles = StyleSheet.create({
   timePickerBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
     padding: 14,
     alignItems: 'center',
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 10,
   },
   timePickerTitle: {
     fontSize: 14,
@@ -4313,23 +4414,32 @@ const styles = StyleSheet.create({
   calendarPicker: {
     width: '100%',
     marginBottom: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2FF',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 10,
+    borderColor: '#C7D2FE',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  calendarHeaderTextWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarNavButton: {
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    backgroundColor: 'rgba(99, 102, 241, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4342,21 +4452,24 @@ const styles = StyleSheet.create({
     color: '#4F46E5',
   },
   calendarHeaderTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#312E81',
     textAlign: 'center',
   },
   calendarHeaderSubtitle: {
     marginTop: 2,
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#4F46E5',
     textAlign: 'center',
   },
   calendarWeekRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 6,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderRadius: 10,
+    paddingVertical: 6,
   },
   calendarWeekday: {
     flex: 1,
@@ -4371,21 +4484,25 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    rowGap: 6,
   },
   calendarDaySpacer: {
-    width: '13.142%',
+    width: '14.2857%',
     aspectRatio: 1,
   },
   calendarDayButton: {
-    width: '13.142%',
+    width: '14.2857%',
     aspectRatio: 1,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(219, 228, 255, 0.9)',
+  },
+  calendarDayButtonSunday: {
+    backgroundColor: 'rgba(254, 226, 226, 0.45)',
+    borderColor: 'rgba(248, 113, 113, 0.3)',
   },
   calendarDayButtonSelected: {
     backgroundColor: '#4F46E5',
@@ -4397,7 +4514,8 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   calendarDayButtonToday: {
-    borderColor: '#4F46E5',
+    backgroundColor: 'rgba(224, 231, 255, 0.8)',
+    borderColor: '#6366F1',
   },
   calendarDayButtonDisabled: {
     backgroundColor: 'rgba(241, 245, 249, 0.85)',
@@ -4417,6 +4535,9 @@ const styles = StyleSheet.create({
   },
   calendarDayTextSelected: {
     color: '#FFFFFF',
+  },
+  calendarDayTextToday: {
+    color: '#3730A3',
   },
   calendarDayTextDisabled: {
     color: '#CBD5E1',
