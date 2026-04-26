@@ -45,7 +45,13 @@ type Task = {
   category?: 'Work' | 'Personal' | 'Health' | 'Study' | 'Other';
 };
 
-type Screen = 'Splash' | 'Home' | 'AddTask' | 'EditTask' | 'DateTasks';
+type Screen =
+  | 'Splash'
+  | 'Home'
+  | 'AddTask'
+  | 'EditTask'
+  | 'DateTasks'
+  | 'StatTasks';
 
 type TaskPriority = NonNullable<Task['priority']>;
 type TaskCategory = NonNullable<Task['category']>;
@@ -136,6 +142,7 @@ const getCalendarDays = (year: number, month: number) => {
 
   return days;
 };
+
 type AppPalette = {
   gradient: string[];
   buttonGradient: string[];
@@ -251,6 +258,15 @@ interface AddTaskScreenProps {
 interface DateTasksScreenProps {
   tasks: Task[];
   selectedDateKey: string;
+  onToggleTask: (id: string) => void;
+  onDeleteTask: (id: string) => void;
+  onNavigate: (screen: Screen, params?: any) => void;
+  palette: AppPalette;
+}
+
+interface StatTasksScreenProps {
+  tasks: Task[];
+  filterType: 'total' | 'done' | 'missed' | 'today';
   onToggleTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onNavigate: (screen: Screen, params?: any) => void;
@@ -471,6 +487,11 @@ function HomeScreen({
   palette,
 }: HomeScreenProps) {
   const slideInAnim = React.useRef(new Animated.Value(100)).current;
+  const statsEntranceAnim = React.useRef(new Animated.Value(0)).current;
+  const frameEntranceAnim = React.useRef(new Animated.Value(0)).current;
+  const calendarFloatAnim = React.useRef(new Animated.Value(0)).current;
+  const capsulesPulseAnim = React.useRef(new Animated.Value(0)).current;
+  const fabPulseAnim = React.useRef(new Animated.Value(0)).current;
   const [now, setNow] = useState(() => Date.now());
   const [homeCalendarMonth, setHomeCalendarMonth] = useState(
     new Date().getMonth() + 1,
@@ -531,6 +552,7 @@ function HomeScreen({
       .padStart(2, '0')}-01T00:00:00`,
   ).toLocaleDateString(undefined, {
     month: 'long',
+    year: 'numeric',
   });
   const taskCountByDate = React.useMemo(() => {
     const counts = new Map<string, number>();
@@ -569,6 +591,119 @@ function HomeScreen({
       useNativeDriver: true,
     }).start();
   }, [slideInAnim]);
+
+  React.useEffect(() => {
+    Animated.stagger(100, [
+      Animated.timing(statsEntranceAnim, {
+        toValue: 1,
+        duration: 380,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(frameEntranceAnim, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const calendarLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(calendarFloatAnim, {
+          toValue: 1,
+          duration: 1900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(calendarFloatAnim, {
+          toValue: 0,
+          duration: 1900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    const capsulesLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(capsulesPulseAnim, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(capsulesPulseAnim, {
+          toValue: 0,
+          duration: 2200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    const fabLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(fabPulseAnim, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fabPulseAnim, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    calendarLoop.start();
+    capsulesLoop.start();
+    fabLoop.start();
+
+    return () => {
+      calendarLoop.stop();
+      capsulesLoop.stop();
+      fabLoop.stop();
+    };
+  }, [
+    calendarFloatAnim,
+    capsulesPulseAnim,
+    fabPulseAnim,
+    frameEntranceAnim,
+    statsEntranceAnim,
+  ]);
+
+  const statsScale = statsEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.94, 1],
+  });
+  const statsOpacity = statsEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const frameTranslateY = frameEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
+  const frameOpacity = frameEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const calendarTranslateY = calendarFloatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -4],
+  });
+  const capsulesScale = capsulesPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.015],
+  });
+  const fabScale = fabPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -638,8 +773,13 @@ function HomeScreen({
   const todayCount = tasks.filter(
     task => (task.date ?? todayKey) === todayKey,
   ).length;
+  const tomorrowKey = React.useMemo(() => {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatDateKey(tomorrow);
+  }, [now]);
   const upcomingCount = tasks.filter(
-    task => (task.date ?? todayKey) > todayKey,
+    task => (task.date ?? todayKey) >= tomorrowKey,
   ).length;
   const sortedTasks = [...tasks].sort((a, b) => {
     const aTimestamp =
@@ -897,9 +1037,20 @@ function HomeScreen({
 
     const sectionVariant =
       title === 'Live' ? 'live' : title === 'Missed' ? 'missed' : 'completed';
+    const sectionIcon =
+      sectionVariant === 'live'
+        ? '🟢'
+        : sectionVariant === 'missed'
+        ? '🚨'
+        : '✅';
 
     return (
-      <View style={styles.completedSection}>
+      <Animated.View
+        style={[
+          styles.completedSection,
+          { transform: [{ scale: capsulesScale }] },
+        ]}
+      >
         <View
           style={[
             styles.completedListBox,
@@ -938,7 +1089,7 @@ function HomeScreen({
                     styles.completedHeaderTitleDefault,
                 ]}
               >
-                {title} ({tasksForSection.length})
+                {sectionIcon} {title} ({tasksForSection.length})
               </Text>
               <Text
                 style={[
@@ -966,7 +1117,7 @@ function HomeScreen({
             </ScrollView>
           )}
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -1222,7 +1373,7 @@ function HomeScreen({
                     variant="headlineMedium"
                     style={[styles.headerTitle, { color: palette.textPrimary }]}
                   >
-                    Daily Taasks
+                    Task Manager
                   </Text>
                   <Text
                     variant="bodySmall"
@@ -1237,210 +1388,306 @@ function HomeScreen({
               </View>
             </TouchableRipple>
 
-            <Card
-              style={[
-                styles.statsCard,
-                {
-                  backgroundColor: palette.surfaceAlt,
-                  borderColor: palette.border,
-                },
-              ]}
-              mode="outlined"
+            <Animated.View
+              style={{
+                opacity: statsOpacity,
+                transform: [{ scale: statsScale }],
+              }}
             >
-              <View style={styles.statsContent}>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNumber}>{tasks.length}</Text>
-                    <Text style={styles.statLabel}>Total</Text>
-                  </View>
-                  <View style={styles.statSeparator} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, styles.statNumberDone]}>
-                      {completedCount}
-                    </Text>
-                    <Text style={styles.statLabel}>Done</Text>
-                  </View>
-                  <View style={styles.statSeparator} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, styles.statNumberMissed]}>
-                      {missedCount}
-                    </Text>
-                    <Text style={styles.statLabel}>Missed</Text>
-                  </View>
-                  <View style={styles.statSeparator} />
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, styles.statNumberToday]}>
-                      {todayCount}
-                    </Text>
-                    <Text style={styles.statLabel}>Today</Text>
-                  </View>
-                  <View style={styles.statSeparator} />
-                  <View style={styles.statItem}>
-                    <Text
-                      style={[styles.statNumber, styles.statNumberUpcoming]}
+              <Card
+                style={[
+                  styles.statsCard,
+                  {
+                    backgroundColor: palette.surfaceAlt,
+                    borderColor: palette.border,
+                  },
+                ]}
+                mode="outlined"
+              >
+                <View style={styles.statsContent}>
+                  <View style={styles.statsGrid}>
+                    <TouchableRipple
+                      onPress={() =>
+                        onNavigate('StatTasks', { filterType: 'total' })
+                      }
+                      style={styles.statItem}
+                      borderless
                     >
-                      {upcomingCount}
-                    </Text>
-                    <Text style={styles.statLabel}>Upcoming</Text>
+                      <View style={styles.statItemContent}>
+                        <Text style={styles.statIcon}>📊</Text>
+                        <Text style={styles.statNumber}>{tasks.length}</Text>
+                        <Text style={styles.statLabel}>Total</Text>
+                      </View>
+                    </TouchableRipple>
+                    <View style={styles.statSeparator} />
+                    <TouchableRipple
+                      onPress={() =>
+                        onNavigate('StatTasks', { filterType: 'done' })
+                      }
+                      style={styles.statItem}
+                      borderless
+                    >
+                      <View style={styles.statItemContent}>
+                        <Text style={styles.statIcon}>✅</Text>
+                        <Text
+                          style={[styles.statNumber, styles.statNumberDone]}
+                        >
+                          {completedCount}
+                        </Text>
+                        <Text style={styles.statLabel}>Done</Text>
+                      </View>
+                    </TouchableRipple>
+                    <View style={styles.statSeparator} />
+                    <TouchableRipple
+                      onPress={() =>
+                        onNavigate('StatTasks', { filterType: 'missed' })
+                      }
+                      style={styles.statItem}
+                      borderless
+                    >
+                      <View style={styles.statItemContent}>
+                        <Text style={styles.statIcon}>🚨</Text>
+                        <Text
+                          style={[styles.statNumber, styles.statNumberMissed]}
+                        >
+                          {missedCount}
+                        </Text>
+                        <Text style={styles.statLabel}>Missed</Text>
+                      </View>
+                    </TouchableRipple>
+                    <View style={styles.statSeparator} />
+                    <TouchableRipple
+                      onPress={() =>
+                        onNavigate('StatTasks', { filterType: 'today' })
+                      }
+                      style={styles.statItem}
+                      borderless
+                    >
+                      <View style={styles.statItemContent}>
+                        <Text style={styles.statIcon}>🗓️</Text>
+                        <Text
+                          style={[styles.statNumber, styles.statNumberToday]}
+                        >
+                          {todayCount}
+                        </Text>
+                        <Text style={styles.statLabel}>Today</Text>
+                      </View>
+                    </TouchableRipple>
+                    <View style={styles.statSeparator} />
+                    <View
+                      style={[styles.statItem, styles.statItemUpcomingOnly]}
+                    >
+                      <View style={styles.statItemContent}>
+                        <Text style={styles.statIcon}>⏭️</Text>
+                        <Text
+                          style={[styles.statNumber, styles.statNumberUpcoming]}
+                        >
+                          {upcomingCount}
+                        </Text>
+                        <Text style={styles.statLabel}>Upcoming</Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </Card>
+              </Card>
+            </Animated.View>
           </Animated.View>
 
-          <View
+          <Animated.View
             style={[
-              styles.homeMiniCalendar,
+              styles.homeUnifiedFrame,
               {
                 backgroundColor: palette.surfaceAlt,
                 borderColor: palette.border,
               },
+              {
+                opacity: frameOpacity,
+                transform: [{ translateY: frameTranslateY }],
+              },
             ]}
           >
-            <View style={styles.homeMiniCalendarHeader}>
-              <TouchableRipple
-                onPress={() => changeHomeCalendarMonth(-1)}
-                style={styles.homeMiniCalendarNavButton}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.homeUnifiedFrameContent}
+            >
+              <Animated.View
+                style={{ transform: [{ translateY: calendarTranslateY }] }}
               >
-                <Text style={styles.homeMiniCalendarNavText}>‹</Text>
-              </TouchableRipple>
-              <View style={styles.homeMiniCalendarMonthPillCompact}>
-                <Text
-                  style={[
-                    styles.homeMiniCalendarMonthPillText,
-                    { color: palette.textPrimary },
-                  ]}
+                <LinearGradient
+                  colors={['rgba(59,130,246,0.08)', 'rgba(255,255,255,0.78)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.homeMiniCalendar}
+                  testID="home-calendar-card"
                 >
-                  {homeCalendarTitle}
-                </Text>
+                  <View style={styles.homeMiniCalendarDivider} />
+                  <View style={styles.homeMiniCalendarHeader}>
+                    <TouchableRipple
+                      onPress={() => changeHomeCalendarMonth(-1)}
+                      style={styles.homeMiniCalendarNavButton}
+                      testID="home-calendar-prev-month"
+                    >
+                      <Text style={styles.homeMiniCalendarNavText}>‹</Text>
+                    </TouchableRipple>
+                    <Text
+                      style={[
+                        styles.homeMiniCalendarMonthPillText,
+                        { color: palette.textPrimary },
+                      ]}
+                      testID="home-calendar-month-label"
+                    >
+                      🗓️ {homeCalendarTitle}
+                    </Text>
+                    <TouchableRipple
+                      onPress={() => changeHomeCalendarMonth(1)}
+                      style={styles.homeMiniCalendarNavButton}
+                      testID="home-calendar-next-month"
+                    >
+                      <Text style={styles.homeMiniCalendarNavText}>›</Text>
+                    </TouchableRipple>
+                  </View>
+                  <View style={styles.homeMiniCalendarDivider} />
+
+                  <View style={styles.homeMiniCalendarWeekRow}>
+                    {homeWeekdayLabels.map((label, index) => (
+                      <Text
+                        key={`home-weekday-${index}`}
+                        style={styles.homeMiniCalendarWeekday}
+                      >
+                        {label}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={styles.homeMiniCalendarDivider} />
+
+                  <View style={styles.homeMiniCalendarGrid}>
+                    {homeCalendarDays.map((day, index) => {
+                      if (!day) {
+                        return (
+                          <View
+                            key={`home-cal-empty-${index}`}
+                            style={styles.homeMiniCalendarDaySpacer}
+                          />
+                        );
+                      }
+
+                      const dateKey = `${homeCalendarYear}-${homeCalendarMonth
+                        .toString()
+                        .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                      const taskCount = taskCountByDate.get(dateKey) ?? 0;
+                      const hasTasks = taskCount > 0;
+                      const isToday = dateKey === todayKey;
+
+                      const dayInner = (
+                        <View
+                          style={[
+                            styles.homeMiniCalendarDayInner,
+                            isToday && styles.homeMiniCalendarDayInnerToday,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.homeMiniCalendarDayText,
+                              hasTasks &&
+                                styles.homeMiniCalendarDayTextHasTasks,
+                              isToday && styles.homeMiniCalendarDayTextToday,
+                            ]}
+                          >
+                            {day}
+                          </Text>
+                          {hasTasks && (
+                            <View style={styles.homeMiniCalendarDot} />
+                          )}
+                        </View>
+                      );
+
+                      return (
+                        <TouchableRipple
+                          key={`home-cal-${dateKey}`}
+                          onPress={() => onNavigate('DateTasks', { dateKey })}
+                          style={[
+                            styles.homeMiniCalendarDay,
+                            hasTasks && styles.homeMiniCalendarDayHasTasks,
+                            isToday && styles.homeMiniCalendarDayToday,
+                          ]}
+                          testID={`home-calendar-day-${dateKey}`}
+                        >
+                          {isToday ? (
+                            <LinearGradient
+                              colors={['#22D3EE', '#3B82F6']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.homeMiniCalendarTodayGradient}
+                            >
+                              {dayInner}
+                            </LinearGradient>
+                          ) : (
+                            dayInner
+                          )}
+                        </TouchableRipple>
+                      );
+                    })}
+                  </View>
+                </LinearGradient>
+              </Animated.View>
+
+              {renderTaskSection('Live', liveTasks, showLive, () =>
+                setShowLive(prev => !prev),
+              )}
+              {renderTaskSection('Missed', missedTasks, showMissed, () =>
+                setShowMissed(prev => !prev),
+              )}
+              {renderTaskSection(
+                'Completed',
+                completedTasks,
+                showCompleted,
+                () => setShowCompleted(prev => !prev),
+              )}
+
+              {liveTasks.length === 0 &&
+                missedTasks.length === 0 &&
+                completedTasks.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyIcon}>📭</Text>
+                    <Text
+                      variant="headlineSmall"
+                      style={[
+                        styles.emptyTitle,
+                        { color: palette.textPrimary },
+                      ]}
+                    >
+                      {tasks.length === 0
+                        ? 'No tasks yet'
+                        : 'No tasks available'}
+                    </Text>
+                    <Text
+                      variant="bodyMedium"
+                      style={[
+                        styles.emptySubtitle,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      {tasks.length === 0
+                        ? 'Tap the + button to create your first task!'
+                        : 'Create a task to populate your sections.'}
+                    </Text>
+                  </View>
+                )}
+            </ScrollView>
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ scale: fabScale }] }}>
+            <TouchableRipple
+              onPress={() => onNavigate('AddTask')}
+              style={[styles.fab, hasReminders && styles.fabWithReminders]}
+            >
+              <View style={styles.fabContent}>
+                <Text style={styles.fabIcon}>+</Text>
+                <Text style={styles.fabSparkle}>✨</Text>
+                {hasReminders && <View style={styles.reminderIndicator} />}
               </View>
-              <TouchableRipple
-                onPress={() => changeHomeCalendarMonth(1)}
-                style={styles.homeMiniCalendarNavButton}
-              >
-                <Text style={styles.homeMiniCalendarNavText}>›</Text>
-              </TouchableRipple>
-            </View>
-
-            <View style={styles.homeMiniCalendarWeekRow}>
-              {homeWeekdayLabels.map((label, index) => (
-                <Text
-                  key={`home-weekday-${index}`}
-                  style={styles.homeMiniCalendarWeekday}
-                >
-                  {label}
-                </Text>
-              ))}
-            </View>
-
-            <View style={styles.homeMiniCalendarGrid}>
-              {homeCalendarDays.map((day, index) => {
-                if (!day) {
-                  return (
-                    <View
-                      key={`home-cal-empty-${index}`}
-                      style={styles.homeMiniCalendarDaySpacer}
-                    />
-                  );
-                }
-
-                const dateKey = `${homeCalendarYear}-${homeCalendarMonth
-                  .toString()
-                  .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-                const taskCount = taskCountByDate.get(dateKey) ?? 0;
-                const hasTasks = taskCount > 0;
-                const isToday = dateKey === todayKey;
-
-                return (
-                  <TouchableRipple
-                    key={`home-cal-${dateKey}`}
-                    disabled={!hasTasks}
-                    onPress={() => onNavigate('DateTasks', { dateKey })}
-                    style={[
-                      styles.homeMiniCalendarDay,
-                      hasTasks && styles.homeMiniCalendarDayHasTasks,
-                      isToday && styles.homeMiniCalendarDayToday,
-                    ]}
-                  >
-                    <View style={styles.homeMiniCalendarDayInner}>
-                      <Text
-                        style={[
-                          styles.homeMiniCalendarDayText,
-                          hasTasks && styles.homeMiniCalendarDayTextHasTasks,
-                          isToday && styles.homeMiniCalendarDayTextToday,
-                        ]}
-                      >
-                        {day}
-                      </Text>
-                      {hasTasks && <View style={styles.homeMiniCalendarDot} />}
-                    </View>
-                  </TouchableRipple>
-                );
-              })}
-            </View>
-          </View>
-
-          {tasks.length > 0 && (
-            <>
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.taskSectionsContent}
-              >
-                {renderTaskSection('Live', liveTasks, showLive, () =>
-                  setShowLive(prev => !prev),
-                )}
-                {renderTaskSection('Missed', missedTasks, showMissed, () =>
-                  setShowMissed(prev => !prev),
-                )}
-                {renderTaskSection(
-                  'Completed',
-                  completedTasks,
-                  showCompleted,
-                  () => setShowCompleted(prev => !prev),
-                )}
-
-                {liveTasks.length === 0 &&
-                  missedTasks.length === 0 &&
-                  completedTasks.length === 0 && (
-                    <View style={styles.emptyContainer}>
-                      <Text style={styles.emptyIcon}>📭</Text>
-                      <Text
-                        variant="headlineSmall"
-                        style={[
-                          styles.emptyTitle,
-                          { color: palette.textPrimary },
-                        ]}
-                      >
-                        {tasks.length === 0
-                          ? 'No tasks yet'
-                          : 'No matching tasks'}
-                      </Text>
-                      <Text
-                        variant="bodyMedium"
-                        style={[
-                          styles.emptySubtitle,
-                          { color: palette.textSecondary },
-                        ]}
-                      >
-                        {tasks.length === 0
-                          ? 'Tap the + button to create your first task!'
-                          : 'Try a different filter to see more tasks.'}
-                      </Text>
-                    </View>
-                  )}
-              </ScrollView>
-            </>
-          )}
-
-          <TouchableRipple
-            onPress={() => onNavigate('AddTask')}
-            style={[styles.fab, hasReminders && styles.fabWithReminders]}
-          >
-            <View style={styles.fabContent}>
-              <Text style={styles.fabIcon}>+</Text>
-              {hasReminders && <View style={styles.reminderIndicator} />}
-            </View>
-          </TouchableRipple>
+            </TouchableRipple>
+          </Animated.View>
         </SafeAreaView>
       </LinearGradient>
     </>
@@ -1455,6 +1702,39 @@ function DateTasksScreen({
   onNavigate,
   palette,
 }: DateTasksScreenProps) {
+  const headerEntranceAnim = React.useRef(new Animated.Value(0)).current;
+  const listEntranceAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.stagger(90, [
+      Animated.timing(headerEntranceAnim, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(listEntranceAnim, {
+        toValue: 1,
+        duration: 380,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [headerEntranceAnim, listEntranceAnim]);
+
+  const headerTranslate = headerEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, 0],
+  });
+  const listTranslate = listEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+  const listScale = listEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.98, 1],
+  });
+
   const tasksForDate = React.useMemo(() => {
     return tasks
       .filter(task => (task.date ?? selectedDateKey) === selectedDateKey)
@@ -1478,153 +1758,464 @@ function DateTasksScreen({
     >
       <AppBackgroundDecor palette={palette} />
       <SafeAreaView style={styles.screen}>
-        <View style={styles.dateTasksHeaderWrap}>
+        <Animated.View
+          style={[
+            styles.dateTasksHeaderWrap,
+            {
+              opacity: headerEntranceAnim,
+              transform: [{ translateY: headerTranslate }],
+            },
+          ]}
+        >
           <TouchableRipple
             onPress={() => onNavigate('Home')}
             style={styles.dateTasksBackButton}
           >
-            <Text style={styles.dateTasksBackText}>← Back</Text>
+            <Text style={styles.dateTasksBackText}>🌈 ← Back</Text>
           </TouchableRipple>
-          <Text style={[styles.dateTasksTitle, { color: palette.textPrimary }]}>
-            {formatTaskDateLabel(selectedDateKey)}
-          </Text>
+          <View style={styles.dateTasksTitleRow}>
+            <Text style={styles.dateTasksTitleIcon}>📅</Text>
+            <Text
+              style={[styles.dateTasksTitle, { color: palette.textPrimary }]}
+            >
+              {formatTaskDateLabel(selectedDateKey)}
+            </Text>
+          </View>
           <Text
             style={[styles.dateTasksSubtitle, { color: palette.textSecondary }]}
           >
-            {tasksForDate.length} task{tasksForDate.length === 1 ? '' : 's'}
+            🧾 {tasksForDate.length} task{tasksForDate.length === 1 ? '' : 's'}
           </Text>
-        </View>
+        </Animated.View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.dateTasksListContent}
+        <Animated.View
+          style={{
+            opacity: listEntranceAnim,
+            transform: [{ translateY: listTranslate }, { scale: listScale }],
+          }}
         >
-          {tasksForDate.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📭</Text>
-              <Text
-                variant="headlineSmall"
-                style={[styles.emptyTitle, { color: palette.textPrimary }]}
-              >
-                No tasks on this date
-              </Text>
-            </View>
-          ) : (
-            tasksForDate.map(task => {
-              const isDone = task.completed;
-              const dateTimeLabel = task.time
-                ? `⏰ ${formatTaskTime(task.time)}`
-                : 'No reminder';
-
-              return (
-                <Card
-                  key={task.id}
-                  style={[
-                    styles.dateTasksCard,
-                    {
-                      backgroundColor: palette.surfaceAlt,
-                      borderColor: palette.border,
-                    },
-                    isDone && styles.cardCompleted,
-                  ]}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.dateTasksListContent}
+          >
+            {tasksForDate.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📭</Text>
+                <Text
+                  variant="headlineSmall"
+                  style={[styles.emptyTitle, { color: palette.textPrimary }]}
                 >
-                  <Card.Content style={styles.dateTasksCardContent}>
-                    <View style={styles.dateTasksCardTop}>
-                      <Text
-                        style={[
-                          styles.dateTasksCardTitle,
-                          { color: palette.textPrimary },
-                          isDone && styles.completedText,
-                        ]}
-                      >
-                        {task.title}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          isDone
-                            ? styles.statusBadgeDone
-                            : styles.statusBadgeLive,
-                        ]}
-                      >
+                  No tasks on this date
+                </Text>
+              </View>
+            ) : (
+              tasksForDate.map(task => {
+                const isDone = task.completed;
+                const dateTimeLabel = task.time
+                  ? `⏰ ${formatTaskTime(task.time)}`
+                  : 'No reminder';
+
+                return (
+                  <Card
+                    key={task.id}
+                    style={[
+                      styles.dateTasksCard,
+                      {
+                        backgroundColor: palette.surfaceAlt,
+                        borderColor: palette.border,
+                      },
+                      isDone && styles.cardCompleted,
+                    ]}
+                  >
+                    <Card.Content style={styles.dateTasksCardContent}>
+                      <View style={styles.dateTasksCardTop}>
                         <Text
                           style={[
-                            styles.statusBadgeText,
-                            isDone
-                              ? styles.statusBadgeTextDone
-                              : styles.statusBadgeTextLive,
+                            styles.dateTasksCardTitle,
+                            { color: palette.textPrimary },
+                            isDone && styles.completedText,
                           ]}
                         >
-                          {isDone ? 'Done' : 'Live'}
+                          {task.title}
                         </Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            isDone
+                              ? styles.statusBadgeDone
+                              : styles.statusBadgeLive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              isDone
+                                ? styles.statusBadgeTextDone
+                                : styles.statusBadgeTextLive,
+                            ]}
+                          >
+                            {isDone ? 'Done' : 'Live'}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
 
-                    {!!task.description && (
+                      {!!task.description && (
+                        <Text
+                          style={[
+                            styles.dateTasksCardDescription,
+                            { color: palette.textSecondary },
+                            isDone && styles.completedDescription,
+                          ]}
+                        >
+                          {task.description}
+                        </Text>
+                      )}
+
                       <Text
                         style={[
-                          styles.dateTasksCardDescription,
+                          styles.dateTasksCardTime,
                           { color: palette.textSecondary },
                           isDone && styles.completedDescription,
                         ]}
                       >
-                        {task.description}
+                        {dateTimeLabel}
                       </Text>
-                    )}
 
-                    <Text
-                      style={[
-                        styles.dateTasksCardTime,
-                        { color: palette.textSecondary },
-                        isDone && styles.completedDescription,
-                      ]}
-                    >
-                      {dateTimeLabel}
-                    </Text>
+                      <View style={styles.dateTasksActionsRow}>
+                        <TouchableRipple
+                          onPress={() => onToggleTask(task.id)}
+                          style={styles.actionButtonWrap}
+                          borderless
+                        >
+                          <LinearGradient
+                            colors={
+                              isDone
+                                ? ['#6366F1', '#818CF8']
+                                : ['#10B981', '#34D399']
+                            }
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.actionButton}
+                          >
+                            <Text style={styles.actionLabel}>
+                              {isDone ? 'Undo' : 'Done'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableRipple>
 
-                    <View style={styles.dateTasksActionsRow}>
-                      <TouchableRipple
-                        onPress={() => onToggleTask(task.id)}
-                        style={styles.actionButtonWrap}
-                        borderless
-                      >
-                        <LinearGradient
-                          colors={
+                        <TouchableRipple
+                          onPress={() => onDeleteTask(task.id)}
+                          style={styles.actionButtonWrap}
+                          borderless
+                        >
+                          <LinearGradient
+                            colors={['#EF4444', '#F97316']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.actionButton}
+                          >
+                            <Text style={styles.actionLabel}>Delete</Text>
+                          </LinearGradient>
+                        </TouchableRipple>
+                      </View>
+                    </Card.Content>
+                  </Card>
+                );
+              })
+            )}
+          </ScrollView>
+        </Animated.View>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+function StatTasksScreen({
+  tasks,
+  filterType,
+  onToggleTask,
+  onDeleteTask,
+  onNavigate,
+  palette,
+}: StatTasksScreenProps) {
+  const [now, setNow] = useState(() => Date.now());
+  const headerEntranceAnim = React.useRef(new Animated.Value(0)).current;
+  const listEntranceAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  React.useEffect(() => {
+    Animated.stagger(90, [
+      Animated.timing(headerEntranceAnim, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(listEntranceAnim, {
+        toValue: 1,
+        duration: 380,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [headerEntranceAnim, listEntranceAnim]);
+
+  const headerTranslate = headerEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, 0],
+  });
+  const listTranslate = listEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+  const listScale = listEntranceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.98, 1],
+  });
+
+  const todayKey = formatDateKey(new Date(now));
+  const screenTitle =
+    filterType === 'done'
+      ? 'Done Tasks'
+      : filterType === 'missed'
+      ? 'Missed Tasks'
+      : filterType === 'today'
+      ? 'Today Tasks'
+      : 'All Tasks';
+  const screenIcon =
+    filterType === 'done'
+      ? '✅'
+      : filterType === 'missed'
+      ? '🚨'
+      : filterType === 'today'
+      ? '🗓️'
+      : '📚';
+
+  const isMissedTask = React.useCallback(
+    (task: Task) => {
+      if (task.completed) {
+        return false;
+      }
+
+      const scheduledAt = parseTaskDateTime(task, now);
+      return Boolean(scheduledAt && scheduledAt.getTime() <= now);
+    },
+    [now],
+  );
+
+  const filteredTasks = React.useMemo(() => {
+    const subset = tasks.filter(task => {
+      if (filterType === 'done') {
+        return task.completed;
+      }
+
+      if (filterType === 'missed') {
+        return isMissedTask(task);
+      }
+
+      if (filterType === 'today') {
+        return (task.date ?? todayKey) === todayKey;
+      }
+
+      return true;
+    });
+
+    return subset.sort((a, b) => {
+      const aTime =
+        parseTaskDateTime(a, now)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bTime =
+        parseTaskDateTime(b, now)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
+  }, [filterType, isMissedTask, now, tasks, todayKey]);
+
+  return (
+    <LinearGradient
+      colors={palette.gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.flex1}
+    >
+      <AppBackgroundDecor palette={palette} />
+      <SafeAreaView style={styles.screen}>
+        <Animated.View
+          style={[
+            styles.dateTasksHeaderWrap,
+            {
+              opacity: headerEntranceAnim,
+              transform: [{ translateY: headerTranslate }],
+            },
+          ]}
+        >
+          <TouchableRipple
+            onPress={() => onNavigate('Home')}
+            style={styles.dateTasksBackButton}
+          >
+            <Text style={styles.dateTasksBackText}>🌈 ← Back</Text>
+          </TouchableRipple>
+          <Text style={[styles.dateTasksTitle, { color: palette.textPrimary }]}>
+            {screenIcon} {screenTitle}
+          </Text>
+          <Text
+            style={[styles.dateTasksSubtitle, { color: palette.textSecondary }]}
+          >
+            🧾 {filteredTasks.length} task
+            {filteredTasks.length === 1 ? '' : 's'}
+          </Text>
+        </Animated.View>
+
+        <Animated.View
+          style={{
+            opacity: listEntranceAnim,
+            transform: [{ translateY: listTranslate }, { scale: listScale }],
+          }}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.dateTasksListContent}
+          >
+            {filteredTasks.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>📭</Text>
+                <Text
+                  variant="headlineSmall"
+                  style={[styles.emptyTitle, { color: palette.textPrimary }]}
+                >
+                  No tasks in this section
+                </Text>
+              </View>
+            ) : (
+              filteredTasks.map(task => {
+                const isDone = task.completed;
+                const isMissed = isMissedTask(task);
+                const dateTimeLabel = task.time
+                  ? `${formatTaskDateLabel(
+                      task.date ?? todayKey,
+                    )}  •  ${formatTaskTime(task.time)}`
+                  : 'No reminder';
+
+                return (
+                  <Card
+                    key={task.id}
+                    style={[
+                      styles.dateTasksCard,
+                      {
+                        backgroundColor: palette.surfaceAlt,
+                        borderColor: palette.border,
+                      },
+                      isDone && styles.cardCompleted,
+                      isMissed && styles.cardMissed,
+                    ]}
+                  >
+                    <Card.Content style={styles.dateTasksCardContent}>
+                      <View style={styles.dateTasksCardTop}>
+                        <Text
+                          style={[
+                            styles.dateTasksCardTitle,
+                            { color: palette.textPrimary },
+                            isDone && styles.completedText,
+                          ]}
+                        >
+                          {task.title}
+                        </Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
                             isDone
-                              ? ['#6366F1', '#818CF8']
-                              : ['#10B981', '#34D399']
-                          }
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.actionButton}
+                              ? styles.statusBadgeDone
+                              : isMissed
+                              ? styles.statusBadgeMissed
+                              : styles.statusBadgeLive,
+                          ]}
                         >
-                          <Text style={styles.actionLabel}>
-                            {isDone ? 'Undo' : 'Done'}
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              isDone
+                                ? styles.statusBadgeTextDone
+                                : isMissed
+                                ? styles.statusBadgeTextMissed
+                                : styles.statusBadgeTextLive,
+                            ]}
+                          >
+                            {isDone ? 'Done' : isMissed ? 'Missed' : 'Live'}
                           </Text>
-                        </LinearGradient>
-                      </TouchableRipple>
+                        </View>
+                      </View>
 
-                      <TouchableRipple
-                        onPress={() => onDeleteTask(task.id)}
-                        style={styles.actionButtonWrap}
-                        borderless
-                      >
-                        <LinearGradient
-                          colors={['#EF4444', '#F97316']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.actionButton}
+                      {!!task.description && (
+                        <Text
+                          style={[
+                            styles.dateTasksCardDescription,
+                            { color: palette.textSecondary },
+                            isDone && styles.completedDescription,
+                          ]}
                         >
-                          <Text style={styles.actionLabel}>Delete</Text>
-                        </LinearGradient>
-                      </TouchableRipple>
-                    </View>
-                  </Card.Content>
-                </Card>
-              );
-            })
-          )}
-        </ScrollView>
+                          {task.description}
+                        </Text>
+                      )}
+
+                      <Text
+                        style={[
+                          styles.dateTasksCardTime,
+                          { color: palette.textSecondary },
+                          isDone && styles.completedDescription,
+                        ]}
+                      >
+                        {dateTimeLabel}
+                      </Text>
+
+                      <View style={styles.dateTasksActionsRow}>
+                        <TouchableRipple
+                          onPress={() => onToggleTask(task.id)}
+                          style={styles.actionButtonWrap}
+                          borderless
+                        >
+                          <LinearGradient
+                            colors={
+                              isDone
+                                ? ['#6366F1', '#818CF8']
+                                : ['#10B981', '#34D399']
+                            }
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.actionButton}
+                          >
+                            <Text style={styles.actionLabel}>
+                              {isDone ? 'Undo' : 'Done'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableRipple>
+
+                        <TouchableRipple
+                          onPress={() => onDeleteTask(task.id)}
+                          style={styles.actionButtonWrap}
+                          borderless
+                        >
+                          <LinearGradient
+                            colors={['#EF4444', '#F97316']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.actionButton}
+                          >
+                            <Text style={styles.actionLabel}>Delete</Text>
+                          </LinearGradient>
+                        </TouchableRipple>
+                      </View>
+                    </Card.Content>
+                  </Card>
+                );
+              })
+            )}
+          </ScrollView>
+        </Animated.View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1677,6 +2268,12 @@ function AddTaskScreen({
   const pickerOpenedAtRef = React.useRef(0);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const slideAnim = React.useRef(new Animated.Value(50)).current;
+  const formHeaderAnim = React.useRef(new Animated.Value(0)).current;
+  const formCardAnim = React.useRef(new Animated.Value(0)).current;
+  const formSectionAnims = React.useRef(
+    Array.from({ length: 7 }, () => new Animated.Value(0)),
+  ).current;
+  const pickerDialogAnim = React.useRef(new Animated.Value(0)).current;
   const keyboardShift = React.useRef(new Animated.Value(0)).current;
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -1865,7 +2462,44 @@ function AddTaskScreen({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+
+    Animated.stagger(85, [
+      Animated.timing(formHeaderAnim, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(formCardAnim, {
+        toValue: 1,
+        duration: 340,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      ...formSectionAnims.map(anim =>
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ),
+    ]).start();
+  }, [fadeAnim, formCardAnim, formHeaderAnim, formSectionAnims, slideAnim]);
+
+  React.useEffect(() => {
+    if (!showDatePicker && !showTimePicker) {
+      pickerDialogAnim.setValue(0);
+      return;
+    }
+
+    Animated.spring(pickerDialogAnim, {
+      toValue: 1,
+      friction: 8,
+      tension: 70,
+      useNativeDriver: true,
+    }).start();
+  }, [pickerDialogAnim, showDatePicker, showTimePicker]);
 
   React.useEffect(() => {
     const showEvent =
@@ -1958,11 +2592,6 @@ function AddTaskScreen({
 
     setTempHours(clampedTime.hours);
     setTempMinutes(clampedTime.minutes);
-    setTime(
-      `${clampedTime.hours.toString().padStart(2, '0')}:${clampedTime.minutes
-        .toString()
-        .padStart(2, '0')}`,
-    );
   };
 
   const adjustHour = (delta: number) => {
@@ -1977,6 +2606,32 @@ function AddTaskScreen({
 
   const setMeridiem = (nextMeridiem: 'AM' | 'PM') => {
     updateTempTime(tempHour12, tempMinutes, nextMeridiem);
+  };
+
+  const commitSelectedTime = () => {
+    setTime(
+      `${tempHours.toString().padStart(2, '0')}:${tempMinutes
+        .toString()
+        .padStart(2, '0')}`,
+    );
+    closePickerPopups();
+  };
+
+  const getAdjacentHour = (offset: number) => {
+    const next = ((tempHour12 - 1 + offset + 12) % 12) + 1;
+    return next.toString().padStart(2, '0');
+  };
+
+  const getAdjacentMinute = (offset: number) => {
+    const next = (tempMinutes + offset + 60) % 60;
+    return next.toString().padStart(2, '0');
+  };
+
+  const getAdjacentMeridiem = (offset: number) => {
+    if (offset === 0) {
+      return tempMeridiem;
+    }
+    return tempMeridiem === 'AM' ? 'PM' : 'AM';
   };
 
   const handleSave = () => {
@@ -2048,7 +2703,22 @@ function AddTaskScreen({
               },
             ]}
           >
-            <View style={styles.formHeader}>
+            <Animated.View
+              style={[
+                styles.formHeader,
+                {
+                  opacity: formHeaderAnim,
+                  transform: [
+                    {
+                      translateY: formHeaderAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [14, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
               <View style={styles.formTitleRow}>
                 <Text style={styles.formIconLarge}>
                   {editingTask ? '✏️' : '✨'}
@@ -2062,499 +2732,776 @@ function AddTaskScreen({
                   </Text>
                 </View>
               </View>
-            </View>
+            </Animated.View>
 
-            <Card
-              style={[
-                styles.formCard,
-                {
-                  backgroundColor: palette.surface,
-                  borderColor: palette.border,
-                },
-              ]}
-              mode="outlined"
+            <Animated.View
+              style={{
+                opacity: formCardAnim,
+                transform: [
+                  {
+                    translateY: formCardAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [18, 0],
+                    }),
+                  },
+                ],
+              }}
             >
-              <Card.Content style={styles.formCardContent}>
-                <View
-                  style={[
-                    styles.formCardGlow,
-                    { backgroundColor: palette.cardGlow },
-                  ]}
-                />
-                <View style={styles.formSection}>
-                  <Text
+              <Card
+                style={[
+                  styles.formCard,
+                  {
+                    backgroundColor: palette.surface,
+                    borderColor: palette.border,
+                  },
+                ]}
+                mode="outlined"
+              >
+                <Card.Content style={styles.formCardContent}>
+                  <View
                     style={[
-                      styles.inputLabel,
-                      { color: palette.textSecondary },
+                      styles.formCardGlow,
+                      { backgroundColor: palette.cardGlow },
                     ]}
-                  >
-                    Task Title *
-                  </Text>
-                  <TextInput
-                    mode="outlined"
-                    value={title}
-                    onChangeText={setTitle}
-                    style={[styles.input, { backgroundColor: palette.inputBg }]}
-                    textColor={palette.textPrimary}
-                    outlineColor="#DBE4FF"
-                    activeOutlineColor="#4F46E5"
-                    placeholder="What needs to be done?"
-                    placeholderTextColor="#94A3B8"
                   />
-                </View>
-
-                <View style={styles.formSection}>
-                  <Text
+                  <Animated.View
                     style={[
-                      styles.inputLabel,
-                      { color: palette.textSecondary },
-                    ]}
-                  >
-                    Description
-                  </Text>
-                  <TextInput
-                    mode="outlined"
-                    value={description}
-                    onChangeText={setDescription}
-                    style={[
-                      styles.input,
-                      styles.descriptionInput,
-                      { backgroundColor: palette.inputBg },
-                    ]}
-                    textColor={palette.textPrimary}
-                    outlineColor="#DBE4FF"
-                    activeOutlineColor="#4F46E5"
-                    placeholder="Add more details (optional)"
-                    placeholderTextColor="#94A3B8"
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                  />
-                </View>
-
-                <View style={styles.formSection}>
-                  <Text
-                    style={[
-                      styles.inputLabel,
-                      { color: palette.textSecondary },
-                    ]}
-                  >
-                    Date
-                  </Text>
-                  <TouchableRipple
-                    onPress={handleDateOpen}
-                    style={[
-                      styles.calendarField,
+                      styles.formSection,
                       {
-                        backgroundColor: palette.inputBg,
-                        borderColor: palette.border,
+                        opacity: formSectionAnims[0],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[0].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
                       },
                     ]}
                   >
-                    <View style={styles.calendarFieldContent}>
-                      <View>
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      Task Title *
+                    </Text>
+                    <TextInput
+                      mode="outlined"
+                      value={title}
+                      onChangeText={setTitle}
+                      style={[
+                        styles.input,
+                        { backgroundColor: palette.inputBg },
+                      ]}
+                      textColor={palette.textPrimary}
+                      outlineColor="#DBE4FF"
+                      activeOutlineColor="#4F46E5"
+                      placeholder="What needs to be done?"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      styles.formSection,
+                      {
+                        opacity: formSectionAnims[1],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[1].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      Description
+                    </Text>
+                    <TextInput
+                      mode="outlined"
+                      value={description}
+                      onChangeText={setDescription}
+                      style={[
+                        styles.input,
+                        styles.descriptionInput,
+                        { backgroundColor: palette.inputBg },
+                      ]}
+                      textColor={palette.textPrimary}
+                      outlineColor="#DBE4FF"
+                      activeOutlineColor="#4F46E5"
+                      placeholder="Add more details (optional)"
+                      placeholderTextColor="#94A3B8"
+                      multiline
+                      numberOfLines={2}
+                      textAlignVertical="top"
+                    />
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      styles.formSection,
+                      {
+                        opacity: formSectionAnims[2],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[2].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      Date
+                    </Text>
+                    <TouchableRipple
+                      onPress={handleDateOpen}
+                      style={[
+                        styles.calendarField,
+                        {
+                          backgroundColor: palette.inputBg,
+                          borderColor: palette.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.calendarFieldContent}>
+                        <View>
+                          <Text
+                            style={[
+                              styles.calendarFieldTitle,
+                              { color: palette.textPrimary },
+                            ]}
+                          >
+                            {formatDateDisplay(selectedDate)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.calendarFieldSubtitle,
+                              { color: palette.textSecondary },
+                            ]}
+                          >
+                            Schedule any day this year
+                          </Text>
+                        </View>
+                        <Text style={styles.calendarFieldIcon}>📅</Text>
+                      </View>
+                    </TouchableRipple>
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      styles.formSection,
+                      {
+                        opacity: formSectionAnims[3],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[3].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  >
+                    <TouchableRipple
+                      onPress={handleTimeOpen}
+                      style={[
+                        styles.timeButton,
+                        {
+                          backgroundColor: palette.inputBg,
+                          borderColor: palette.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.timeButtonContent}>
                         <Text
                           style={[
-                            styles.calendarFieldTitle,
+                            styles.timeButtonText,
                             { color: palette.textPrimary },
                           ]}
                         >
-                          {formatDateDisplay(selectedDate)}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.calendarFieldSubtitle,
-                            { color: palette.textSecondary },
-                          ]}
-                        >
-                          Schedule any day this year
+                          {time
+                            ? `⏰ ${formatTaskTime(time)}`
+                            : '⏰ Set time (optional)'}
                         </Text>
                       </View>
-                      <Text style={styles.calendarFieldIcon}>📅</Text>
-                    </View>
-                  </TouchableRipple>
-                </View>
+                    </TouchableRipple>
+                  </Animated.View>
 
-                <View style={styles.formSection}>
-                  <TouchableRipple
-                    onPress={handleTimeOpen}
+                  <Animated.View
                     style={[
-                      styles.timeButton,
+                      styles.formSection,
                       {
-                        backgroundColor: palette.inputBg,
-                        borderColor: palette.border,
+                        opacity: formSectionAnims[4],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[4].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
                       },
                     ]}
                   >
-                    <View style={styles.timeButtonContent}>
-                      <Text
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      Priority
+                    </Text>
+                    <View style={styles.optionRow}>
+                      {priorityOptions.map(option => {
+                        const isSelected = priority === option;
+
+                        return (
+                          <TouchableRipple
+                            key={option}
+                            onPress={() => setPriority(option)}
+                            style={[
+                              styles.optionChip,
+                              isSelected
+                                ? option === 'High'
+                                  ? styles.optionChipHighSelected
+                                  : option === 'Medium'
+                                  ? styles.optionChipMediumSelected
+                                  : styles.optionChipLowSelected
+                                : styles.optionChipInactive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.optionChipText,
+                                isSelected
+                                  ? styles.optionChipTextSelected
+                                  : styles.optionChipTextDefault,
+                              ]}
+                            >
+                              {option}
+                            </Text>
+                          </TouchableRipple>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+
+                  <Animated.View
+                    style={[
+                      styles.formSection,
+                      {
+                        opacity: formSectionAnims[5],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[5].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: palette.textSecondary },
+                      ]}
+                    >
+                      Category
+                    </Text>
+                    <View style={styles.optionRow}>
+                      {categoryOptions.map(option => {
+                        const isSelected = category === option;
+
+                        return (
+                          <TouchableRipple
+                            key={option}
+                            onPress={() => setCategory(option)}
+                            style={[
+                              styles.optionChip,
+                              isSelected
+                                ? styles.optionChipCategorySelected
+                                : styles.optionChipInactive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.optionChipText,
+                                isSelected
+                                  ? styles.optionChipTextSelected
+                                  : styles.optionChipTextDefault,
+                              ]}
+                            >
+                              {option}
+                            </Text>
+                          </TouchableRipple>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+
+                  <Modal
+                    visible={showDatePicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={closePickerPopups}
+                  >
+                    <Pressable
+                      style={styles.pickerPopupOverlay}
+                      onPress={handlePickerOverlayPress}
+                    >
+                      <Animated.View
                         style={[
-                          styles.timeButtonText,
-                          { color: palette.textPrimary },
+                          styles.pickerDialogAnimatedWrap,
+                          {
+                            opacity: pickerDialogAnim,
+                            transform: [
+                              {
+                                translateY: pickerDialogAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [20, 0],
+                                }),
+                              },
+                              {
+                                scale: pickerDialogAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.96, 1],
+                                }),
+                              },
+                            ],
+                          },
                         ]}
                       >
-                        {time
-                          ? `⏰ ${formatTaskTime(time)}`
-                          : '⏰ Set time (optional)'}
-                      </Text>
-                    </View>
-                  </TouchableRipple>
-                </View>
-
-                <View style={styles.formSection}>
-                  <Text
-                    style={[
-                      styles.inputLabel,
-                      { color: palette.textSecondary },
-                    ]}
-                  >
-                    Priority
-                  </Text>
-                  <View style={styles.optionRow}>
-                    {priorityOptions.map(option => {
-                      const isSelected = priority === option;
-
-                      return (
-                        <TouchableRipple
-                          key={option}
-                          onPress={() => setPriority(option)}
-                          style={[
-                            styles.optionChip,
-                            isSelected
-                              ? option === 'High'
-                                ? styles.optionChipHighSelected
-                                : option === 'Medium'
-                                ? styles.optionChipMediumSelected
-                                : styles.optionChipLowSelected
-                              : styles.optionChipInactive,
-                          ]}
+                        <Pressable
+                          style={styles.timePickerBox}
+                          onPress={event => event.stopPropagation()}
                         >
-                          <Text
-                            style={[
-                              styles.optionChipText,
-                              isSelected
-                                ? styles.optionChipTextSelected
-                                : styles.optionChipTextDefault,
-                            ]}
-                          >
-                            {option}
+                          <Text style={styles.timePickerTitle}>
+                            Select Date
                           </Text>
-                        </TouchableRipple>
-                      );
-                    })}
-                  </View>
-                </View>
 
-                <View style={styles.formSection}>
-                  <Text
-                    style={[
-                      styles.inputLabel,
-                      { color: palette.textSecondary },
-                    ]}
-                  >
-                    Category
-                  </Text>
-                  <View style={styles.optionRow}>
-                    {categoryOptions.map(option => {
-                      const isSelected = category === option;
-
-                      return (
-                        <TouchableRipple
-                          key={option}
-                          onPress={() => setCategory(option)}
-                          style={[
-                            styles.optionChip,
-                            isSelected
-                              ? styles.optionChipCategorySelected
-                              : styles.optionChipInactive,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.optionChipText,
-                              isSelected
-                                ? styles.optionChipTextSelected
-                                : styles.optionChipTextDefault,
+                          <LinearGradient
+                            colors={[
+                              'rgba(59,130,246,0.08)',
+                              'rgba(255,255,255,0.88)',
                             ]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.formHomeCalendar}
                           >
-                            {option}
-                          </Text>
-                        </TouchableRipple>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <Modal
-                  visible={showDatePicker}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={closePickerPopups}
-                >
-                  <Pressable
-                    style={styles.pickerPopupOverlay}
-                    onPress={handlePickerOverlayPress}
-                  >
-                    <Pressable
-                      style={styles.timePickerBox}
-                      onPress={event => event.stopPropagation()}
-                    >
-                      <Text style={styles.timePickerTitle}>Select Date</Text>
-
-                      <View style={styles.calendarPicker}>
-                        <View style={styles.calendarHeader}>
-                          <TouchableRipple
-                            onPress={() => changeCalendarMonth(-1)}
-                            disabled={tempMonth === currentMonth}
-                            style={[
-                              styles.calendarNavButton,
-                              tempMonth === currentMonth &&
-                                styles.calendarNavButtonDisabled,
-                            ]}
-                          >
-                            <Text style={styles.calendarNavButtonText}>‹</Text>
-                          </TouchableRipple>
-                          <View style={styles.calendarHeaderTextWrap}>
-                            <Text style={styles.calendarHeaderTitle}>
-                              {monthNames[tempMonth - 1]} {currentYear}
-                            </Text>
-                            <Text style={styles.calendarHeaderSubtitle}>
-                              {formatDateDisplay(tempDateKey)}
-                            </Text>
-                          </View>
-                          <TouchableRipple
-                            onPress={() => changeCalendarMonth(1)}
-                            disabled={tempMonth === 12}
-                            style={[
-                              styles.calendarNavButton,
-                              tempMonth === 12 &&
-                                styles.calendarNavButtonDisabled,
-                            ]}
-                          >
-                            <Text style={styles.calendarNavButtonText}>›</Text>
-                          </TouchableRipple>
-                        </View>
-
-                        <View style={styles.calendarWeekRow}>
-                          {weekdayNames.map((day, index) => (
-                            <Text
-                              key={`weekday-${index}`}
-                              style={[
-                                styles.calendarWeekday,
-                                index === 0 && styles.calendarWeekdaySunday,
-                              ]}
-                            >
-                              {day}
-                            </Text>
-                          ))}
-                        </View>
-
-                        <View style={styles.calendarGrid}>
-                          {calendarDays.map((day, index) => {
-                            if (!day) {
-                              return (
-                                <View
-                                  key={`empty-${index}`}
-                                  style={styles.calendarDaySpacer}
-                                />
-                              );
-                            }
-
-                            const dateKey = `${currentYear}-${tempMonth
-                              .toString()
-                              .padStart(2, '0')}-${day
-                              .toString()
-                              .padStart(2, '0')}`;
-                            const isDisabled = dateKey < todayKey;
-                            const isSelected = tempDay === day;
-                            const isToday = dateKey === todayKey;
-                            const isSunday =
-                              new Date(`${dateKey}T00:00:00`).getDay() === 0;
-                            const hasScheduledTask =
-                              scheduledDateSet.has(dateKey);
-
-                            return (
+                            <View style={styles.formHomeCalendarHeader}>
                               <TouchableRipple
-                                key={dateKey}
-                                onPress={() => {
-                                  if (isDisabled) {
-                                    return;
-                                  }
-
-                                  updateTempDate(currentYear, tempMonth, day);
-                                  setSelectedDate(dateKey);
-                                  closePickerPopups();
-                                }}
-                                disabled={isDisabled}
+                                onPress={() => changeCalendarMonth(-1)}
+                                disabled={tempMonth === currentMonth}
                                 style={[
-                                  styles.calendarDayButton,
-                                  isToday && styles.calendarDayButtonToday,
-                                  isSunday &&
-                                    !isDisabled &&
-                                    styles.calendarDayButtonSunday,
-                                  isSelected &&
-                                    styles.calendarDayButtonSelected,
-                                  isDisabled &&
-                                    styles.calendarDayButtonDisabled,
+                                  styles.formHomeCalendarNavButton,
+                                  tempMonth === currentMonth &&
+                                    styles.formHomeCalendarNavButtonDisabled,
                                 ]}
                               >
-                                <View style={styles.calendarDayContent}>
-                                  <Text
+                                <Text style={styles.formHomeCalendarNavText}>
+                                  ‹
+                                </Text>
+                              </TouchableRipple>
+                              <View
+                                style={styles.formHomeCalendarHeaderTextWrap}
+                              >
+                                <Text style={styles.formHomeCalendarMonthText}>
+                                  {monthNames[tempMonth - 1]} {currentYear}
+                                </Text>
+                                <Text style={styles.formHomeCalendarSubtitle}>
+                                  {formatDateDisplay(tempDateKey)}
+                                </Text>
+                              </View>
+                              <TouchableRipple
+                                onPress={() => changeCalendarMonth(1)}
+                                disabled={tempMonth === 12}
+                                style={[
+                                  styles.formHomeCalendarNavButton,
+                                  tempMonth === 12 &&
+                                    styles.formHomeCalendarNavButtonDisabled,
+                                ]}
+                              >
+                                <Text style={styles.formHomeCalendarNavText}>
+                                  ›
+                                </Text>
+                              </TouchableRipple>
+                            </View>
+
+                            <View style={styles.formHomeCalendarWeekRow}>
+                              {weekdayNames.map((day, index) => (
+                                <Text
+                                  key={`weekday-${index}`}
+                                  style={[
+                                    styles.formHomeCalendarWeekday,
+                                    index === 0 &&
+                                      styles.formHomeCalendarWeekdaySunday,
+                                  ]}
+                                >
+                                  {day}
+                                </Text>
+                              ))}
+                            </View>
+
+                            <View style={styles.formHomeCalendarGrid}>
+                              {calendarDays.map((day, index) => {
+                                if (!day) {
+                                  return (
+                                    <View
+                                      key={`empty-${index}`}
+                                      style={styles.formHomeCalendarDaySpacer}
+                                    />
+                                  );
+                                }
+
+                                const dateKey = `${currentYear}-${tempMonth
+                                  .toString()
+                                  .padStart(2, '0')}-${day
+                                  .toString()
+                                  .padStart(2, '0')}`;
+                                const isDisabled = dateKey < todayKey;
+                                const isSelected = tempDay === day;
+                                const isToday = dateKey === todayKey;
+                                const isSunday =
+                                  new Date(`${dateKey}T00:00:00`).getDay() ===
+                                  0;
+                                const hasScheduledTask =
+                                  scheduledDateSet.has(dateKey);
+
+                                return (
+                                  <TouchableRipple
+                                    key={dateKey}
+                                    onPress={() => {
+                                      if (isDisabled) {
+                                        return;
+                                      }
+
+                                      updateTempDate(
+                                        currentYear,
+                                        tempMonth,
+                                        day,
+                                      );
+                                      setSelectedDate(dateKey);
+                                      closePickerPopups();
+                                    }}
+                                    disabled={isDisabled}
                                     style={[
-                                      styles.calendarDayText,
-                                      isSelected &&
-                                        styles.calendarDayTextSelected,
+                                      styles.formHomeCalendarDay,
                                       isToday &&
-                                        !isSelected &&
-                                        styles.calendarDayTextToday,
+                                        styles.formHomeCalendarDayToday,
                                       isSunday &&
-                                        !isSelected &&
                                         !isDisabled &&
-                                        styles.calendarDayTextSunday,
+                                        styles.formHomeCalendarDaySunday,
+                                      isSelected &&
+                                        styles.formHomeCalendarDaySelected,
                                       isDisabled &&
-                                        styles.calendarDayTextDisabled,
+                                        styles.formHomeCalendarDayDisabled,
                                     ]}
                                   >
-                                    {day}
-                                  </Text>
-                                  {hasScheduledTask && (
                                     <View
-                                      style={[
-                                        styles.calendarDayDot,
-                                        isSelected &&
-                                          styles.calendarDayDotSelected,
-                                      ]}
-                                    />
-                                  )}
-                                </View>
-                              </TouchableRipple>
-                            );
-                          })}
-                        </View>
-                      </View>
+                                      style={styles.formHomeCalendarDayInner}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.formHomeCalendarDayText,
+                                          isSelected &&
+                                            styles.formHomeCalendarDayTextSelected,
+                                          isToday &&
+                                            !isSelected &&
+                                            styles.formHomeCalendarDayTextToday,
+                                          isSunday &&
+                                            !isSelected &&
+                                            !isDisabled &&
+                                            styles.formHomeCalendarDayTextSunday,
+                                          isDisabled &&
+                                            styles.formHomeCalendarDayTextDisabled,
+                                        ]}
+                                      >
+                                        {day}
+                                      </Text>
+                                      {hasScheduledTask && (
+                                        <View
+                                          style={[
+                                            styles.formHomeCalendarDot,
+                                            isSelected &&
+                                              styles.formHomeCalendarDotSelected,
+                                          ]}
+                                        />
+                                      )}
+                                    </View>
+                                  </TouchableRipple>
+                                );
+                              })}
+                            </View>
+                          </LinearGradient>
+                        </Pressable>
+                      </Animated.View>
                     </Pressable>
-                  </Pressable>
-                </Modal>
+                  </Modal>
 
-                <Modal
-                  visible={showTimePicker}
-                  transparent
-                  animationType="fade"
-                  onRequestClose={closePickerPopups}
-                >
-                  <Pressable
-                    style={styles.pickerPopupOverlay}
-                    onPress={handlePickerOverlayPress}
+                  <Modal
+                    visible={showTimePicker}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={closePickerPopups}
                   >
                     <Pressable
-                      style={styles.timePickerBox}
-                      onPress={event => event.stopPropagation()}
+                      style={styles.pickerPopupOverlay}
+                      onPress={handlePickerOverlayPress}
                     >
-                      <Text style={styles.timePickerTitle}>Select Time</Text>
-
-                      <View style={styles.pickerContainer}>
-                        <View style={styles.compactPickerColumn}>
-                          <TouchableRipple
-                            onPress={() => adjustHour(1)}
-                            style={styles.pickerAdjustButton}
-                          >
-                            <Text style={styles.pickerAdjustText}>+</Text>
-                          </TouchableRipple>
-                          <View style={styles.compactPickerValue}>
-                            <Text style={styles.compactPickerValueText}>
-                              {tempHour12.toString().padStart(2, '0')}
+                      <Animated.View
+                        style={[
+                          styles.pickerDialogAnimatedWrap,
+                          {
+                            opacity: pickerDialogAnim,
+                            transform: [
+                              {
+                                translateY: pickerDialogAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [20, 0],
+                                }),
+                              },
+                              {
+                                scale: pickerDialogAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.96, 1],
+                                }),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        <Pressable
+                          style={[
+                            styles.timePickerBox,
+                            styles.timePickerBoxLarge,
+                          ]}
+                          onPress={event => event.stopPropagation()}
+                        >
+                          <View style={styles.timePickerHeaderRow}>
+                            <Text style={styles.timePickerTitle}>
+                              Select Time
                             </Text>
-                          </View>
-                          <TouchableRipple
-                            onPress={() => adjustHour(-1)}
-                            style={styles.pickerAdjustButton}
-                          >
-                            <Text style={styles.pickerAdjustText}>-</Text>
-                          </TouchableRipple>
-                        </View>
-
-                        <Text style={styles.pickerSeparator}>:</Text>
-
-                        <View style={styles.compactPickerColumn}>
-                          <TouchableRipple
-                            onPress={() => adjustMinute(1)}
-                            style={styles.pickerAdjustButton}
-                          >
-                            <Text style={styles.pickerAdjustText}>+</Text>
-                          </TouchableRipple>
-                          <View style={styles.compactPickerValue}>
-                            <Text style={styles.compactPickerValueText}>
-                              {tempMinutes.toString().padStart(2, '0')}
-                            </Text>
-                          </View>
-                          <TouchableRipple
-                            onPress={() => adjustMinute(-1)}
-                            style={styles.pickerAdjustButton}
-                          >
-                            <Text style={styles.pickerAdjustText}>-</Text>
-                          </TouchableRipple>
-                        </View>
-
-                        <View style={styles.meridiemColumn}>
-                          {(['AM', 'PM'] as const).map(period => (
                             <TouchableRipple
-                              key={period}
-                              onPress={() => setMeridiem(period)}
-                              style={[
-                                styles.meridiemButton,
-                                tempMeridiem === period &&
-                                  styles.meridiemButtonActive,
-                              ]}
+                              onPress={closePickerPopups}
+                              style={styles.timePickerCloseButton}
                             >
-                              <Text
-                                style={[
-                                  styles.meridiemButtonText,
-                                  tempMeridiem === period &&
-                                    styles.meridiemButtonTextActive,
-                                ]}
-                              >
-                                {period}
+                              <Text style={styles.timePickerCloseButtonText}>
+                                ✕
                               </Text>
                             </TouchableRipple>
-                          ))}
-                        </View>
-                      </View>
-                    </Pressable>
-                  </Pressable>
-                </Modal>
+                          </View>
 
-                <View style={styles.buttonRow}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => onNavigate('Home')}
-                    style={styles.button}
-                    labelStyle={styles.buttonLabel}
-                    textColor="#4F46E5"
-                  >
-                    Cancel
-                  </Button>
-                  <TouchableRipple
-                    onPress={handleSave}
-                    disabled={!canSave}
+                          <View style={styles.timePickerDivider} />
+
+                          <View style={styles.timeWheelGrid}>
+                            <View style={styles.timeWheelColumn}>
+                              <TouchableRipple
+                                onPress={() => adjustHour(-1)}
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentHour(-1)}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() => adjustHour(0)}
+                                style={styles.timeWheelActiveButtonHour}
+                              >
+                                <Text style={styles.timeWheelActiveText}>
+                                  {tempHour12.toString().padStart(2, '0')}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() => adjustHour(1)}
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentHour(1)}
+                                </Text>
+                              </TouchableRipple>
+                            </View>
+
+                            <View style={styles.timeWheelColumn}>
+                              <TouchableRipple
+                                onPress={() => adjustMinute(-1)}
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentMinute(-1)}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() => adjustMinute(0)}
+                                style={styles.timeWheelActiveButtonMinute}
+                              >
+                                <Text style={styles.timeWheelActiveText}>
+                                  {tempMinutes.toString().padStart(2, '0')}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() => adjustMinute(1)}
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentMinute(1)}
+                                </Text>
+                              </TouchableRipple>
+                            </View>
+
+                            <View style={styles.timeWheelColumn}>
+                              <TouchableRipple
+                                onPress={() =>
+                                  setMeridiem(
+                                    getAdjacentMeridiem(-1) as 'AM' | 'PM',
+                                  )
+                                }
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentMeridiem(-1)}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() =>
+                                  setMeridiem(tempMeridiem as 'AM' | 'PM')
+                                }
+                                style={styles.timeWheelActiveButtonMeridiem}
+                              >
+                                <Text
+                                  style={[
+                                    styles.timeWheelActiveText,
+                                    styles.timeWheelActiveTextLight,
+                                  ]}
+                                >
+                                  {tempMeridiem}
+                                </Text>
+                              </TouchableRipple>
+                              <TouchableRipple
+                                onPress={() =>
+                                  setMeridiem(
+                                    getAdjacentMeridiem(1) as 'AM' | 'PM',
+                                  )
+                                }
+                                style={styles.timeWheelGhostButton}
+                              >
+                                <Text style={styles.timeWheelGhostText}>
+                                  {getAdjacentMeridiem(1)}
+                                </Text>
+                              </TouchableRipple>
+                            </View>
+                          </View>
+
+                          <View style={styles.timePickerDivider} />
+
+                          <Text style={styles.timePickerPreviewText}>
+                            {tempHour12.toString().padStart(2, '0')} :{' '}
+                            {tempMinutes.toString().padStart(2, '0')}{' '}
+                            {tempMeridiem}
+                          </Text>
+
+                          <View style={styles.timePickerFooterDivider} />
+
+                          <View style={styles.timePickerActionRow}>
+                            <TouchableRipple
+                              onPress={closePickerPopups}
+                              style={styles.timePickerCancelButton}
+                            >
+                              <Text style={styles.timePickerCancelText}>
+                                Cancel
+                              </Text>
+                            </TouchableRipple>
+
+                            <TouchableRipple
+                              onPress={commitSelectedTime}
+                              style={styles.timePickerConfirmWrap}
+                            >
+                              <LinearGradient
+                                colors={['#6D28D9', '#6366F1', '#22D3EE']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.timePickerConfirmGradient}
+                              >
+                                <Text style={styles.timePickerConfirmText}>
+                                  Confirm
+                                </Text>
+                              </LinearGradient>
+                            </TouchableRipple>
+                          </View>
+                        </Pressable>
+                      </Animated.View>
+                    </Pressable>
+                  </Modal>
+
+                  <Animated.View
                     style={[
-                      styles.saveGradientWrap,
-                      !canSave && styles.saveGradientDisabled,
+                      styles.buttonRow,
+                      {
+                        opacity: formSectionAnims[6],
+                        transform: [
+                          {
+                            translateY: formSectionAnims[6].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
                     ]}
                   >
-                    <LinearGradient
-                      colors={palette.buttonGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.saveGradientButton}
+                    <Button
+                      mode="outlined"
+                      onPress={() => onNavigate('Home')}
+                      style={styles.button}
+                      labelStyle={styles.buttonLabel}
+                      textColor="#4F46E5"
                     >
-                      <Text style={styles.buttonLabel}>
-                        {editingTask ? 'Save' : 'Create'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableRipple>
-                </View>
-              </Card.Content>
-            </Card>
+                      Cancel
+                    </Button>
+                    <TouchableRipple
+                      onPress={handleSave}
+                      disabled={!canSave}
+                      style={[
+                        styles.saveGradientWrap,
+                        !canSave && styles.saveGradientDisabled,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={palette.buttonGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.saveGradientButton}
+                      >
+                        <Text style={styles.buttonLabel}>
+                          {editingTask ? 'Save' : 'Create'}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableRipple>
+                  </Animated.View>
+                </Card.Content>
+              </Card>
+            </Animated.View>
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
@@ -2992,6 +3939,15 @@ export default function App() {
             onNavigate={navigate}
             palette={palette}
           />
+        ) : currentScreen === 'StatTasks' ? (
+          <StatTasksScreen
+            tasks={tasks}
+            filterType={screenParams?.filterType ?? 'total'}
+            onToggleTask={toggleTask}
+            onDeleteTask={deleteTask}
+            onNavigate={navigate}
+            palette={palette}
+          />
         ) : currentScreen === 'EditTask' ? (
           <AddTaskScreen
             onAddTask={addTask}
@@ -3417,6 +4373,7 @@ const styles = StyleSheet.create({
   },
   statItem: {
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -3424,6 +4381,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(196, 181, 253, 0.32)',
     backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  statItemUpcomingOnly: {
+    opacity: 0.92,
+  },
+  statItemContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statIcon: {
+    fontSize: 12,
+    marginBottom: 1,
   },
   statNumber: {
     fontSize: 18,
@@ -3456,41 +4424,73 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginLeft: 4,
   },
-  searchInput: {
-    marginBottom: 12,
-    borderRadius: 16,
+  homeUnifiedFrame: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+  },
+  homeUnifiedFrameContent: {
+    paddingBottom: 100,
+    gap: 8,
   },
   homeMiniCalendar: {
-    marginBottom: 8,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingTop: 6,
-    paddingBottom: 5,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  homeMiniCalendarDivider: {
+    height: 1,
+    backgroundColor: 'rgba(148, 163, 184, 0.25)',
+    marginBottom: 8,
   },
   homeMiniCalendarHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: 4,
-    paddingHorizontal: 1,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  homeMiniCalendarMonthPill: {
+  homeMiniCalendarNavButton: {
+    width: 34,
+    height: 34,
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.25)',
+    borderColor: 'rgba(125, 211, 252, 0.45)',
+  },
+  homeMiniCalendarNavText: {
+    fontSize: 24,
+    lineHeight: 26,
+    fontWeight: '500',
+    color: '#4C5A78',
   },
   homeMiniCalendarMonthPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  homeMiniCalendarWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  homeMiniCalendarWeekday: {
+    width: '14.2857%',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B95AF',
   },
   homeMiniCalendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    rowGap: 3,
+    rowGap: 6,
   },
   homeMiniCalendarDaySpacer: {
     width: '14.2857%',
@@ -3499,153 +4499,55 @@ const styles = StyleSheet.create({
   homeMiniCalendarDay: {
     width: '14.2857%',
     aspectRatio: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   homeMiniCalendarDayHasTasks: {
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.28)',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
   },
   homeMiniCalendarDayToday: {
-    borderWidth: 1,
-    borderColor: '#6366F1',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  homeMiniCalendarTodayGradient: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   homeMiniCalendarDayInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 22,
-    minHeight: 22,
+    minWidth: 24,
+    minHeight: 24,
+  },
+  homeMiniCalendarDayInnerToday: {
+    minWidth: 42,
+    minHeight: 42,
   },
   homeMiniCalendarDayText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#67718D',
   },
   homeMiniCalendarDayTextHasTasks: {
-    color: '#3730A3',
+    color: '#4A5371',
   },
   homeMiniCalendarDayTextToday: {
-    color: '#1D4ED8',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   homeMiniCalendarDot: {
     width: 3,
     height: 3,
     borderRadius: 2,
-    marginTop: 1,
-    backgroundColor: '#4F46E5',
-  },
-  filterRow: {
-    gap: 6,
-    paddingBottom: 0,
-    paddingHorizontal: 0,
-    alignItems: 'center',
-    overflow: 'visible',
-  },
-  filterRowGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  filterRowSingleLine: {
-    flexWrap: 'nowrap',
-  },
-  filterScroll: {
-    flexGrow: 0,
-    marginBottom: 6,
-    overflow: 'visible',
-  },
-  filterSelectWrap: {
-    marginBottom: 0,
-    position: 'relative',
-    zIndex: 30,
-    elevation: 30,
-    flex: 1,
-    minWidth: 0,
-  },
-  filterSelectButton: {
-    borderRadius: 16,
-    borderWidth: 1,
-    width: '100%',
-    minHeight: 38,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  filterSelectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  filterSelectLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  filterSelectArrow: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  filterDropdown: {
-    marginTop: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    minWidth: 124,
-    overflow: 'hidden',
-    zIndex: 40,
-    shadowColor: '#4C1D95',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  filterDropdownOption: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  filterDropdownOptionActive: {
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
-  },
-  filterDropdownOptionText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  filterDropdownOptionTextActive: {
-    color: '#4C1D95',
-    fontWeight: '800',
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-  },
-  filterChipText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  filterChipActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  filterChipInactive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DBE4FF',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-  },
-  filterChipTextInactive: {
-    color: '#64748B',
+    marginTop: 2,
+    backgroundColor: '#7C86A1',
   },
   sortRow: {
     gap: 8,
@@ -3721,6 +4623,14 @@ const styles = StyleSheet.create({
   dateTasksTitle: {
     fontSize: 24,
     fontWeight: '800',
+  },
+  dateTasksTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dateTasksTitleIcon: {
+    fontSize: 22,
   },
   dateTasksSubtitle: {
     marginTop: 2,
@@ -3946,7 +4856,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(226, 232, 240, 0.8)',
   },
   completedSection: {
-    marginTop: 4,
+    marginTop: 0,
     position: 'relative',
     zIndex: 1,
     shadowColor: '#312E81',
@@ -4268,6 +5178,12 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     letterSpacing: 0.5,
   },
+  fabSparkle: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    fontSize: 12,
+  },
   reminderIndicator: {
     position: 'absolute',
     top: 4,
@@ -4533,6 +5449,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
+  pickerDialogAnimatedWrap: {
+    width: '100%',
+  },
   timePickerBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
@@ -4546,11 +5465,170 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 10,
   },
+  timePickerBoxLarge: {
+    paddingTop: 12,
+    paddingBottom: 0,
+    overflow: 'hidden',
+  },
   timePickerTitle: {
-    fontSize: 14,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#304D91',
+    marginBottom: 0,
+  },
+  timePickerHeaderRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+  },
+  timePickerCloseButton: {
+    position: 'absolute',
+    right: 0,
+    top: -2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#D5DCFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerCloseButtonText: {
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#7683A9',
+  },
+  timePickerDivider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#D7DEEF',
+    marginTop: 12,
     marginBottom: 12,
+  },
+  timeWheelGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  timeWheelColumn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeWheelGhostButton: {
+    width: '100%',
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  timeWheelGhostText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#B0BAD8',
+  },
+  timeWheelActiveButtonHour: {
+    width: '100%',
+    minHeight: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D5DEF7',
+    backgroundColor: '#E8ECFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeWheelActiveButtonMinute: {
+    width: '100%',
+    minHeight: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#BCD6FA',
+    backgroundColor: '#CFE2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeWheelActiveButtonMeridiem: {
+    width: '100%',
+    minHeight: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#7B72F4',
+    backgroundColor: '#6E63F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6E63F0',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  timeWheelActiveText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#2F4D91',
+  },
+  timeWheelActiveTextLight: {
+    color: '#FFFFFF',
+  },
+  timePickerPreviewText: {
+    width: '100%',
+    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#2F4D91',
+    marginBottom: 14,
+  },
+  timePickerFooterDivider: {
+    width: '120%',
+    height: 1,
+    backgroundColor: '#D7DEEF',
+    marginLeft: '-10%',
+  },
+  timePickerActionRow: {
+    width: '120%',
+    marginLeft: '-10%',
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#F7F9FF',
+  },
+  timePickerCancelButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: '#CDD5ED',
+    backgroundColor: '#EDEFF8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerCancelText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#5E72A8',
+  },
+  timePickerConfirmWrap: {
+    flex: 1,
+    borderRadius: 26,
+    overflow: 'hidden',
+  },
+  timePickerConfirmGradient: {
+    minHeight: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerConfirmText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   pickerContainer: {
     flexDirection: 'row',
@@ -4575,6 +5653,135 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 8,
+  },
+  formHomeCalendar: {
+    width: '100%',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.22)',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    marginBottom: 8,
+  },
+  formHomeCalendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  formHomeCalendarHeaderTextWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formHomeCalendarMonthText: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    color: '#304D91',
+  },
+  formHomeCalendarSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7CA5',
+  },
+  formHomeCalendarNavButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.45)',
+  },
+  formHomeCalendarNavButtonDisabled: {
+    opacity: 0.35,
+  },
+  formHomeCalendarNavText: {
+    fontSize: 24,
+    lineHeight: 26,
+    fontWeight: '500',
+    color: '#4C5A78',
+  },
+  formHomeCalendarWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  formHomeCalendarWeekday: {
+    width: '14.2857%',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B95AF',
+  },
+  formHomeCalendarWeekdaySunday: {
+    color: '#DC2626',
+  },
+  formHomeCalendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 6,
+  },
+  formHomeCalendarDaySpacer: {
+    width: '14.2857%',
+    aspectRatio: 1,
+  },
+  formHomeCalendarDay: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formHomeCalendarDayToday: {
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+  },
+  formHomeCalendarDaySunday: {
+    backgroundColor: 'rgba(254, 226, 226, 0.35)',
+  },
+  formHomeCalendarDaySelected: {
+    backgroundColor: '#4F46E5',
+    borderWidth: 1,
+    borderColor: '#4F46E5',
+  },
+  formHomeCalendarDayDisabled: {
+    opacity: 0.38,
+  },
+  formHomeCalendarDayInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 24,
+    minHeight: 24,
+  },
+  formHomeCalendarDayText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4A5371',
+  },
+  formHomeCalendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  formHomeCalendarDayTextToday: {
+    color: '#0F4CD1',
+    fontWeight: '800',
+  },
+  formHomeCalendarDayTextSunday: {
+    color: '#DC2626',
+  },
+  formHomeCalendarDayTextDisabled: {
+    color: '#AEB8CF',
+  },
+  formHomeCalendarDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
+    backgroundColor: '#5B5DD8',
+  },
+  formHomeCalendarDotSelected: {
+    backgroundColor: '#FFFFFF',
   },
   calendarHeader: {
     flexDirection: 'row',
