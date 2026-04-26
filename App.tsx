@@ -5,6 +5,7 @@ import {
   Keyboard,
   Modal,
   Platform,
+  Pressable,
   StatusBar,
   StyleSheet,
   useColorScheme,
@@ -29,6 +30,7 @@ import {
   Button,
   Card,
   PaperProvider,
+  Menu,
   Text,
   TextInput,
   TouchableRipple,
@@ -54,11 +56,6 @@ const STORAGE_KEY = '@todo_tasks_v1';
 const NOTIFICATION_CHANNEL_ID = 'task-reminders';
 const DEFAULT_PRIORITY: TaskPriority = 'Medium';
 const DEFAULT_CATEGORY: TaskCategory = 'Personal';
-const PRIORITY_ORDER: Record<TaskPriority, number> = {
-  High: 0,
-  Medium: 1,
-  Low: 2,
-};
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -66,6 +63,13 @@ const formatDateKey = (date: Date) => {
   const day = `${date.getDate()}`.padStart(2, '0');
 
   return `${year}-${month}-${day}`;
+};
+
+const getTomorrowDateKey = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return formatDateKey(tomorrow);
 };
 
 const parseTaskDateTime = (
@@ -489,9 +493,7 @@ function HomeScreen({
   const [tempModalHours, setTempModalHours] = useState(
     new Date(now).getHours(),
   );
-  const [tempModalMinutes, setTempModalMinutes] = useState(
-    new Date(now).getMinutes(),
-  );
+  const [tempModalMinutes, setTempModalMinutes] = useState(0);
   const monthNames = [
     'January',
     'February',
@@ -519,6 +521,12 @@ function HomeScreen({
     [tasks],
   );
   const completedCount = tasks.filter(t => t.completed).length;
+
+  const closeFilterPopups = () => {
+    setShowFilterDropdown(false);
+    setShowPriorityDropdown(false);
+    setShowCategoryDropdown(false);
+  };
 
   React.useEffect(() => {
     Animated.timing(slideInAnim, {
@@ -1242,235 +1250,211 @@ function HomeScreen({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={styles.filterControlScroll}
-                contentContainerStyle={styles.filterControlRow}
+                style={styles.filterScroll}
+                contentContainerStyle={styles.filterRow}
               >
-                <View style={styles.filterSelectWrapCompact}>
-                  <TouchableRipple
-                    onPress={() => {
-                      setShowFilterDropdown(prev => !prev);
-                      setShowPriorityDropdown(false);
-                      setShowCategoryDropdown(false);
-                    }}
-                    style={[
-                      styles.filterSelectButton,
+                <View style={styles.filterSelectWrap}>
+                  <Menu
+                    visible={showFilterDropdown}
+                    onDismiss={closeFilterPopups}
+                    anchor={
+                      <TouchableRipple
+                        onPress={() => {
+                          setShowFilterDropdown(prev => !prev);
+                          setShowPriorityDropdown(false);
+                          setShowCategoryDropdown(false);
+                        }}
+                        style={[
+                          styles.filterSelectButton,
+                          {
+                            backgroundColor: palette.surfaceAlt,
+                            borderColor: palette.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.filterSelectRow}>
+                          <Text
+                            style={[
+                              styles.filterSelectLabel,
+                              { color: palette.textPrimary },
+                            ]}
+                          >
+                            Filter: {activeFilter}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.filterSelectArrow,
+                              { color: palette.textSecondary },
+                            ]}
+                          >
+                            {showFilterDropdown ? '▴' : '▾'}
+                          </Text>
+                        </View>
+                      </TouchableRipple>
+                    }
+                    contentStyle={[
+                      styles.filterDropdown,
                       {
                         backgroundColor: palette.surfaceAlt,
                         borderColor: palette.border,
                       },
                     ]}
                   >
-                    <View style={styles.filterSelectRow}>
-                      <Text
-                        style={[
-                          styles.filterSelectLabel,
-                          { color: palette.textPrimary },
-                        ]}
-                      >
-                        Filter: {activeFilter}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.filterSelectArrow,
-                          { color: palette.textSecondary },
-                        ]}
-                      >
-                        {showFilterDropdown ? '▴' : '▾'}
-                      </Text>
-                    </View>
-                  </TouchableRipple>
+                    {filterOptions.map(option => {
+                      const isActive = activeFilter === option.key;
 
-                  {showFilterDropdown && (
-                    <View
-                      style={[
-                        styles.filterDropdown,
-                        {
-                          backgroundColor: palette.surfaceAlt,
-                          borderColor: palette.border,
-                        },
-                      ]}
-                    >
-                      {filterOptions.map(option => {
-                        const isActive = activeFilter === option.key;
-
-                        return (
-                          <TouchableRipple
-                            key={option.key}
-                            onPress={() => {
-                              setActiveFilter(option.key);
-                              setShowFilterDropdown(false);
-                            }}
-                            style={[
-                              styles.filterDropdownOption,
-                              isActive && styles.filterDropdownOptionActive,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.filterDropdownOptionText,
-                                isActive &&
-                                  styles.filterDropdownOptionTextActive,
-                              ]}
-                            >
-                              {option.label}
-                            </Text>
-                          </TouchableRipple>
-                        );
-                      })}
-                    </View>
-                  )}
+                      return (
+                        <Menu.Item
+                          key={option.key}
+                          onPress={() => {
+                            setActiveFilter(option.key);
+                            setShowFilterDropdown(false);
+                          }}
+                          title={option.label}
+                          titleStyle={[
+                            styles.filterDropdownOptionText,
+                            isActive && styles.filterDropdownOptionTextActive,
+                          ]}
+                        />
+                      );
+                    })}
+                  </Menu>
                 </View>
 
-                <View style={styles.filterSelectWrapCompact}>
-                  <TouchableRipple
-                    onPress={() => {
-                      setShowPriorityDropdown(prev => !prev);
-                      setShowFilterDropdown(false);
-                      setShowCategoryDropdown(false);
-                    }}
-                    style={[
-                      styles.filterSelectButton,
+                <View style={styles.filterSelectWrap}>
+                  <Menu
+                    visible={showPriorityDropdown}
+                    onDismiss={closeFilterPopups}
+                    anchor={
+                      <TouchableRipple
+                        onPress={() => {
+                          setShowPriorityDropdown(prev => !prev);
+                          setShowFilterDropdown(false);
+                          setShowCategoryDropdown(false);
+                        }}
+                        style={[
+                          styles.filterSelectButton,
+                          {
+                            backgroundColor: palette.surfaceAlt,
+                            borderColor: palette.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.filterSelectRow}>
+                          <Text
+                            style={[
+                              styles.filterSelectLabel,
+                              { color: palette.textPrimary },
+                            ]}
+                          >
+                            Priority: {activePriorityFilter}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.filterSelectArrow,
+                              { color: palette.textSecondary },
+                            ]}
+                          >
+                            {showPriorityDropdown ? '▴' : '▾'}
+                          </Text>
+                        </View>
+                      </TouchableRipple>
+                    }
+                    contentStyle={[
+                      styles.filterDropdown,
                       {
                         backgroundColor: palette.surfaceAlt,
                         borderColor: palette.border,
                       },
                     ]}
                   >
-                    <View style={styles.filterSelectRow}>
-                      <Text
-                        style={[
-                          styles.filterSelectLabel,
-                          { color: palette.textPrimary },
-                        ]}
-                      >
-                        Priority: {activePriorityFilter}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.filterSelectArrow,
-                          { color: palette.textSecondary },
-                        ]}
-                      >
-                        {showPriorityDropdown ? '▴' : '▾'}
-                      </Text>
-                    </View>
-                  </TouchableRipple>
+                    {priorityFilterOptions.map(option => {
+                      const isActive = activePriorityFilter === option.key;
 
-                  {showPriorityDropdown && (
-                    <View
-                      style={[
-                        styles.filterDropdown,
-                        {
-                          backgroundColor: palette.surfaceAlt,
-                          borderColor: palette.border,
-                        },
-                      ]}
-                    >
-                      {priorityFilterOptions.map(option => {
-                        const isActive = activePriorityFilter === option.key;
-
-                        return (
-                          <TouchableRipple
-                            key={`priority-${option.key}`}
-                            onPress={() => {
-                              setActivePriorityFilter(option.key);
-                              setShowPriorityDropdown(false);
-                            }}
-                            style={[
-                              styles.filterDropdownOption,
-                              isActive && styles.filterDropdownOptionActive,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.filterDropdownOptionText,
-                                isActive &&
-                                  styles.filterDropdownOptionTextActive,
-                              ]}
-                            >
-                              {option.label}
-                            </Text>
-                          </TouchableRipple>
-                        );
-                      })}
-                    </View>
-                  )}
+                      return (
+                        <Menu.Item
+                          key={`priority-${option.key}`}
+                          onPress={() => {
+                            setActivePriorityFilter(option.key);
+                            setShowPriorityDropdown(false);
+                          }}
+                          title={option.label}
+                          titleStyle={[
+                            styles.filterDropdownOptionText,
+                            isActive && styles.filterDropdownOptionTextActive,
+                          ]}
+                        />
+                      );
+                    })}
+                  </Menu>
                 </View>
 
-                <View style={styles.filterSelectWrapCompact}>
-                  <TouchableRipple
-                    onPress={() => {
-                      setShowCategoryDropdown(prev => !prev);
-                      setShowFilterDropdown(false);
-                      setShowPriorityDropdown(false);
-                    }}
-                    style={[
-                      styles.filterSelectButton,
+                <View style={styles.filterSelectWrap}>
+                  <Menu
+                    visible={showCategoryDropdown}
+                    onDismiss={closeFilterPopups}
+                    anchor={
+                      <TouchableRipple
+                        onPress={() => {
+                          setShowCategoryDropdown(prev => !prev);
+                          setShowFilterDropdown(false);
+                          setShowPriorityDropdown(false);
+                        }}
+                        style={[
+                          styles.filterSelectButton,
+                          {
+                            backgroundColor: palette.surfaceAlt,
+                            borderColor: palette.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.filterSelectRow}>
+                          <Text
+                            style={[
+                              styles.filterSelectLabel,
+                              { color: palette.textPrimary },
+                            ]}
+                          >
+                            Category: {activeCategoryFilter}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.filterSelectArrow,
+                              { color: palette.textSecondary },
+                            ]}
+                          >
+                            {showCategoryDropdown ? '▴' : '▾'}
+                          </Text>
+                        </View>
+                      </TouchableRipple>
+                    }
+                    contentStyle={[
+                      styles.filterDropdown,
                       {
                         backgroundColor: palette.surfaceAlt,
                         borderColor: palette.border,
                       },
                     ]}
                   >
-                    <View style={styles.filterSelectRow}>
-                      <Text
-                        style={[
-                          styles.filterSelectLabel,
-                          { color: palette.textPrimary },
-                        ]}
-                      >
-                        Category: {activeCategoryFilter}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.filterSelectArrow,
-                          { color: palette.textSecondary },
-                        ]}
-                      >
-                        {showCategoryDropdown ? '▴' : '▾'}
-                      </Text>
-                    </View>
-                  </TouchableRipple>
+                    {categoryFilterOptions.map(option => {
+                      const isActive = activeCategoryFilter === option.key;
 
-                  {showCategoryDropdown && (
-                    <View
-                      style={[
-                        styles.filterDropdown,
-                        {
-                          backgroundColor: palette.surfaceAlt,
-                          borderColor: palette.border,
-                        },
-                      ]}
-                    >
-                      {categoryFilterOptions.map(option => {
-                        const isActive = activeCategoryFilter === option.key;
-
-                        return (
-                          <TouchableRipple
-                            key={`category-${option.key}`}
-                            onPress={() => {
-                              setActiveCategoryFilter(option.key);
-                              setShowCategoryDropdown(false);
-                            }}
-                            style={[
-                              styles.filterDropdownOption,
-                              isActive && styles.filterDropdownOptionActive,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.filterDropdownOptionText,
-                                isActive &&
-                                  styles.filterDropdownOptionTextActive,
-                              ]}
-                            >
-                              {option.label}
-                            </Text>
-                          </TouchableRipple>
-                        );
-                      })}
-                    </View>
-                  )}
+                      return (
+                        <Menu.Item
+                          key={`category-${option.key}`}
+                          onPress={() => {
+                            setActiveCategoryFilter(option.key);
+                            setShowCategoryDropdown(false);
+                          }}
+                          title={option.label}
+                          titleStyle={[
+                            styles.filterDropdownOptionText,
+                            isActive && styles.filterDropdownOptionTextActive,
+                          ]}
+                        />
+                      );
+                    })}
+                  </Menu>
                 </View>
               </ScrollView>
 
@@ -1601,15 +1585,16 @@ function AddTaskScreen({
   const todayKey = formatDateKey(today);
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1;
+  const defaultDateKey = React.useMemo(() => getTomorrowDateKey(), []);
   const [title, setTitle] = useState(editingTask?.title || '');
   const [description, setDescription] = useState(
     editingTask?.description || '',
   );
   const [time, setTime] = useState(editingTask?.time || '');
   const [selectedDate, setSelectedDate] = useState(
-    editingTask?.date || todayKey,
+    editingTask?.date || defaultDateKey,
   );
-  const selectedDateParts = (editingTask?.date || todayKey)
+  const selectedDateParts = (editingTask?.date || defaultDateKey)
     .split('-')
     .map(value => parseInt(value, 10));
   const [tempMonth, setTempMonth] = useState(
@@ -1673,6 +1658,11 @@ function AddTaskScreen({
       ),
     [tasks],
   );
+
+  const closePickerPopups = () => {
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  };
 
   const formatDateDisplay = (dateKey: string) => {
     const date = new Date(`${dateKey}T00:00:00`);
@@ -1866,59 +1856,12 @@ function AddTaskScreen({
     setShowTimePicker(true);
   };
 
-  const handleTimeConfirm = () => {
-    const clampedTime = clampToSelectedDateTime(
-      selectedDate,
-      tempHours,
-      tempMinutes,
-    );
-
-    setTempHours(clampedTime.hours);
-    setTempMinutes(clampedTime.minutes);
-    setTime(
-      `${clampedTime.hours.toString().padStart(2, '0')}:${clampedTime.minutes
-        .toString()
-        .padStart(2, '0')}`,
-    );
-    setShowTimePicker(false);
-  };
-
-  const handleTimeCancel = () => {
-    setShowTimePicker(false);
-  };
-
   const handleDateOpen = () => {
     const [year, month, day] = selectedDate
       .split('-')
       .map(value => parseInt(value, 10));
     updateTempDate(year, month, day);
     setShowDatePicker(true);
-  };
-
-  const handleDateConfirm = () => {
-    const next = clampDateParts(currentYear, tempMonth, tempDay);
-    const nextDateKey = `${next.year}-${next.month
-      .toString()
-      .padStart(2, '0')}-${next.day.toString().padStart(2, '0')}`;
-    setSelectedDate(nextDateKey);
-
-    if (time) {
-      const [hours, minutes] = time
-        .split(':')
-        .map(value => parseInt(value, 10));
-      const nextTime = clampToSelectedDateTime(nextDateKey, hours, minutes);
-      setTime(
-        `${nextTime.hours.toString().padStart(2, '0')}:${nextTime.minutes
-          .toString()
-          .padStart(2, '0')}`,
-      );
-    }
-
-    setShowDatePicker(false);
-  };
-
-  const handleDateCancel = () => {
-    setShowDatePicker(false);
   };
 
   const calendarDays = getCalendarDays(currentYear, tempMonth);
@@ -1940,6 +1883,11 @@ function AddTaskScreen({
 
     setTempHours(clampedTime.hours);
     setTempMinutes(clampedTime.minutes);
+    setTime(
+      `${clampedTime.hours.toString().padStart(2, '0')}:${clampedTime.minutes
+        .toString()
+        .padStart(2, '0')}`,
+    );
   };
 
   const adjustHour = (delta: number) => {
@@ -1971,7 +1919,7 @@ function AddTaskScreen({
       title: title.trim(),
       description: description.trim(),
       time: time || undefined,
-      date: time ? selectedDate : undefined,
+      date: selectedDate,
       priority,
       category,
     };
@@ -1985,9 +1933,12 @@ function AddTaskScreen({
     setTitle('');
     setDescription('');
     setTime('');
-    setSelectedDate(todayKey);
-    setTempMonth(today.getMonth() + 1);
-    setTempDay(today.getDate());
+    setSelectedDate(defaultDateKey);
+    const [, resetMonth, resetDay] = defaultDateKey
+      .split('-')
+      .map(value => parseInt(value, 10));
+    setTempMonth(resetMonth);
+    setTempDay(resetDay);
     setPriority(DEFAULT_PRIORITY);
     setCategory(DEFAULT_CATEGORY);
     onNavigate('Home');
@@ -2263,10 +2214,16 @@ function AddTaskScreen({
                   visible={showDatePicker}
                   transparent
                   animationType="fade"
-                  onRequestClose={handleDateCancel}
+                  onRequestClose={closePickerPopups}
                 >
-                  <View style={styles.pickerPopupOverlay}>
-                    <View style={styles.timePickerBox}>
+                  <Pressable
+                    style={styles.pickerPopupOverlay}
+                    onPress={closePickerPopups}
+                  >
+                    <Pressable
+                      style={styles.timePickerBox}
+                      onPress={() => undefined}
+                    >
                       <Text style={styles.timePickerTitle}>Select Date</Text>
 
                       <View style={styles.calendarPicker}>
@@ -2344,10 +2301,15 @@ function AddTaskScreen({
                             return (
                               <TouchableRipple
                                 key={dateKey}
-                                onPress={() =>
-                                  !isDisabled &&
-                                  updateTempDate(currentYear, tempMonth, day)
-                                }
+                                onPress={() => {
+                                  if (isDisabled) {
+                                    return;
+                                  }
+
+                                  updateTempDate(currentYear, tempMonth, day);
+                                  setSelectedDate(dateKey);
+                                  closePickerPopups();
+                                }}
                                 disabled={isDisabled}
                                 style={[
                                   styles.calendarDayButton,
@@ -2389,43 +2351,24 @@ function AddTaskScreen({
                           })}
                         </View>
                       </View>
-
-                      <View style={styles.timePickerButtonRow}>
-                        <Button
-                          mode="outlined"
-                          onPress={handleDateCancel}
-                          style={styles.timePickerButton}
-                          labelStyle={styles.timePickerButtonLabel}
-                          textColor="#4F46E5"
-                        >
-                          Cancel
-                        </Button>
-                        <TouchableRipple
-                          onPress={handleDateConfirm}
-                          style={[
-                            styles.timePickerGradientWrap,
-                            styles.timePickerConfirmShadow,
-                          ]}
-                        >
-                          <LinearGradient
-                            colors={palette.buttonGradient}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.timePickerGradientButton}
-                          >
-                            <Text style={styles.timePickerButtonLabel}>
-                              Done
-                            </Text>
-                          </LinearGradient>
-                        </TouchableRipple>
-                      </View>
-                    </View>
-                  </View>
+                    </Pressable>
+                  </Pressable>
                 </Modal>
 
-                {showTimePicker && (
-                  <View style={styles.timePickerModal}>
-                    <View style={styles.timePickerBox}>
+                <Modal
+                  visible={showTimePicker}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={closePickerPopups}
+                >
+                  <Pressable
+                    style={styles.pickerPopupOverlay}
+                    onPress={closePickerPopups}
+                  >
+                    <Pressable
+                      style={styles.timePickerBox}
+                      onPress={() => undefined}
+                    >
                       <Text style={styles.timePickerTitle}>Select Time</Text>
 
                       <View style={styles.pickerContainer}>
@@ -2495,39 +2438,9 @@ function AddTaskScreen({
                           ))}
                         </View>
                       </View>
-
-                      <View style={styles.timePickerButtonRow}>
-                        <Button
-                          mode="outlined"
-                          onPress={handleTimeCancel}
-                          style={styles.timePickerButton}
-                          labelStyle={styles.timePickerButtonLabel}
-                          textColor="#4F46E5"
-                        >
-                          Cancel
-                        </Button>
-                        <TouchableRipple
-                          onPress={handleTimeConfirm}
-                          style={[
-                            styles.timePickerGradientWrap,
-                            styles.timePickerConfirmShadow,
-                          ]}
-                        >
-                          <LinearGradient
-                            colors={palette.buttonGradient}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.timePickerGradientButton}
-                          >
-                            <Text style={styles.timePickerButtonLabel}>
-                              Done
-                            </Text>
-                          </LinearGradient>
-                        </TouchableRipple>
-                      </View>
-                    </View>
-                  </View>
-                )}
+                    </Pressable>
+                  </Pressable>
+                </Modal>
 
                 <View style={styles.buttonRow}>
                   <Button
@@ -3455,6 +3368,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     paddingHorizontal: 2,
     alignItems: 'center',
+    overflow: 'visible',
   },
   filterRowSingleLine: {
     flexWrap: 'nowrap',
@@ -3462,10 +3376,13 @@ const styles = StyleSheet.create({
   filterScroll: {
     flexGrow: 0,
     marginBottom: 8,
+    overflow: 'visible',
   },
   filterSelectWrap: {
-    marginBottom: 8,
-    zIndex: 5,
+    marginBottom: 0,
+    position: 'relative',
+    zIndex: 30,
+    elevation: 30,
   },
   filterSelectButton: {
     borderRadius: 14,
@@ -3492,6 +3409,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
+    zIndex: 40,
+    elevation: 12,
   },
   filterDropdownOption: {
     minHeight: 38,
@@ -3761,6 +3680,8 @@ const styles = StyleSheet.create({
   },
   completedSection: {
     marginTop: 4,
+    position: 'relative',
+    zIndex: 1,
   },
   completedSortWrap: {
     alignItems: 'flex-end',
