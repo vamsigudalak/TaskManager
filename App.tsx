@@ -29,7 +29,6 @@ import {
   Button,
   Card,
   PaperProvider,
-  Menu,
   Text,
   TextInput,
   TouchableRipple,
@@ -46,7 +45,7 @@ type Task = {
   category?: 'Work' | 'Personal' | 'Health' | 'Study' | 'Other';
 };
 
-type Screen = 'Splash' | 'Home' | 'AddTask' | 'EditTask';
+type Screen = 'Splash' | 'Home' | 'AddTask' | 'EditTask' | 'DateTasks';
 
 type TaskPriority = NonNullable<Task['priority']>;
 type TaskCategory = NonNullable<Task['category']>;
@@ -246,6 +245,15 @@ interface AddTaskScreenProps {
   onNavigate: (screen: Screen) => void;
   tasks: Task[];
   editingTask?: Task;
+  palette: AppPalette;
+}
+
+interface DateTasksScreenProps {
+  tasks: Task[];
+  selectedDateKey: string;
+  onToggleTask: (id: string) => void;
+  onDeleteTask: (id: string) => void;
+  onNavigate: (screen: Screen, params?: any) => void;
   palette: AppPalette;
 }
 
@@ -464,19 +472,12 @@ function HomeScreen({
 }: HomeScreenProps) {
   const slideInAnim = React.useRef(new Animated.Value(100)).current;
   const [now, setNow] = useState(() => Date.now());
-  const [activeFilter, setActiveFilter] = useState<
-    'All' | 'Today' | 'Live' | 'Missed'
-  >('All');
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [activePriorityFilter, setActivePriorityFilter] = useState<
-    'All' | TaskPriority
-  >('All');
-  const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<
-    'All' | TaskCategory
-  >('All');
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [homeCalendarMonth, setHomeCalendarMonth] = useState(
+    new Date().getMonth() + 1,
+  );
+  const [homeCalendarYear, setHomeCalendarYear] = useState(
+    new Date().getFullYear(),
+  );
   const [showLive, setShowLive] = useState(false);
   const [showMissed, setShowMissed] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -512,6 +513,7 @@ function HomeScreen({
   const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const modalCalendarDays = getCalendarDays(tempModalYear, tempModalMonth);
   const todayKey = formatDateKey(new Date(now));
+  const homeWeekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const scheduledDateSet = React.useMemo(
     () =>
       new Set(
@@ -522,11 +524,41 @@ function HomeScreen({
     [tasks],
   );
   const completedCount = tasks.filter(t => t.completed).length;
+  const homeCalendarDays = getCalendarDays(homeCalendarYear, homeCalendarMonth);
+  const homeCalendarTitle = new Date(
+    `${homeCalendarYear}-${homeCalendarMonth
+      .toString()
+      .padStart(2, '0')}-01T00:00:00`,
+  ).toLocaleDateString(undefined, {
+    month: 'long',
+  });
+  const taskCountByDate = React.useMemo(() => {
+    const counts = new Map<string, number>();
 
-  const closeFilterPopups = () => {
-    setShowFilterDropdown(false);
-    setShowPriorityDropdown(false);
-    setShowCategoryDropdown(false);
+    tasks.forEach(task => {
+      const dateKey = task.date ?? todayKey;
+      counts.set(dateKey, (counts.get(dateKey) ?? 0) + 1);
+    });
+
+    return counts;
+  }, [tasks, todayKey]);
+
+  const changeHomeCalendarMonth = (delta: number) => {
+    setHomeCalendarMonth(prevMonth => {
+      const nextMonth = prevMonth + delta;
+
+      if (nextMonth < 1) {
+        setHomeCalendarYear(prevYear => prevYear - 1);
+        return 12;
+      }
+
+      if (nextMonth > 12) {
+        setHomeCalendarYear(prevYear => prevYear + 1);
+        return 1;
+      }
+
+      return nextMonth;
+    });
   };
 
   React.useEffect(() => {
@@ -609,81 +641,7 @@ function HomeScreen({
   const upcomingCount = tasks.filter(
     task => (task.date ?? todayKey) > todayKey,
   ).length;
-  const filterOptions: Array<{
-    key: 'All' | 'Today' | 'Live' | 'Missed';
-    label: string;
-  }> = [
-    { key: 'All', label: 'All' },
-    { key: 'Today', label: 'Today' },
-    { key: 'Live', label: 'Live' },
-    { key: 'Missed', label: 'Missed' },
-  ];
-  const priorityFilterOptions: Array<{
-    key: 'All' | TaskPriority;
-    label: string;
-  }> = [
-    { key: 'All', label: 'All' },
-    { key: 'High', label: 'High' },
-    { key: 'Medium', label: 'Medium' },
-    { key: 'Low', label: 'Low' },
-  ];
-  const categoryFilterOptions: Array<{
-    key: 'All' | TaskCategory;
-    label: string;
-  }> = [
-    { key: 'All', label: 'All' },
-    { key: 'Work', label: 'Work' },
-    { key: 'Personal', label: 'Personal' },
-    { key: 'Health', label: 'Health' },
-    { key: 'Study', label: 'Study' },
-    { key: 'Other', label: 'Other' },
-  ];
-
-  const searchedTasks = tasks.filter(task => {
-    const query = searchQuery.trim().toLowerCase();
-
-    if (!query) {
-      return true;
-    }
-
-    return (
-      task.title.toLowerCase().includes(query) ||
-      task.description.toLowerCase().includes(query) ||
-      (task.category ?? DEFAULT_CATEGORY).toLowerCase().includes(query) ||
-      (task.priority ?? DEFAULT_PRIORITY).toLowerCase().includes(query)
-    );
-  });
-
-  const filteredTasks = searchedTasks.filter(task => {
-    const taskState = getTaskState(task);
-
-    if (
-      activePriorityFilter !== 'All' &&
-      (task.priority ?? DEFAULT_PRIORITY) !== activePriorityFilter
-    ) {
-      return false;
-    }
-
-    if (
-      activeCategoryFilter !== 'All' &&
-      (task.category ?? DEFAULT_CATEGORY) !== activeCategoryFilter
-    ) {
-      return false;
-    }
-
-    switch (activeFilter) {
-      case 'Today':
-        return (task.date ?? todayKey) === todayKey;
-      case 'Live':
-        return taskState.isLive;
-      case 'Missed':
-        return !task.completed && taskState.isMissed;
-      default:
-        return true;
-    }
-  });
-
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
+  const sortedTasks = [...tasks].sort((a, b) => {
     const aTimestamp =
       parseTaskDateTime(a, now)?.getTime() ?? Number.MAX_SAFE_INTEGER;
     const bTimestamp =
@@ -1330,238 +1288,100 @@ function HomeScreen({
             </Card>
           </Animated.View>
 
+          <View
+            style={[
+              styles.homeMiniCalendar,
+              {
+                backgroundColor: palette.surfaceAlt,
+                borderColor: palette.border,
+              },
+            ]}
+          >
+            <View style={styles.homeMiniCalendarHeader}>
+              <TouchableRipple
+                onPress={() => changeHomeCalendarMonth(-1)}
+                style={styles.homeMiniCalendarNavButton}
+              >
+                <Text style={styles.homeMiniCalendarNavText}>‹</Text>
+              </TouchableRipple>
+              <View style={styles.homeMiniCalendarMonthPillCompact}>
+                <Text
+                  style={[
+                    styles.homeMiniCalendarMonthPillText,
+                    { color: palette.textPrimary },
+                  ]}
+                >
+                  {homeCalendarTitle}
+                </Text>
+              </View>
+              <TouchableRipple
+                onPress={() => changeHomeCalendarMonth(1)}
+                style={styles.homeMiniCalendarNavButton}
+              >
+                <Text style={styles.homeMiniCalendarNavText}>›</Text>
+              </TouchableRipple>
+            </View>
+
+            <View style={styles.homeMiniCalendarWeekRow}>
+              {homeWeekdayLabels.map((label, index) => (
+                <Text
+                  key={`home-weekday-${index}`}
+                  style={styles.homeMiniCalendarWeekday}
+                >
+                  {label}
+                </Text>
+              ))}
+            </View>
+
+            <View style={styles.homeMiniCalendarGrid}>
+              {homeCalendarDays.map((day, index) => {
+                if (!day) {
+                  return (
+                    <View
+                      key={`home-cal-empty-${index}`}
+                      style={styles.homeMiniCalendarDaySpacer}
+                    />
+                  );
+                }
+
+                const dateKey = `${homeCalendarYear}-${homeCalendarMonth
+                  .toString()
+                  .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const taskCount = taskCountByDate.get(dateKey) ?? 0;
+                const hasTasks = taskCount > 0;
+                const isToday = dateKey === todayKey;
+
+                return (
+                  <TouchableRipple
+                    key={`home-cal-${dateKey}`}
+                    disabled={!hasTasks}
+                    onPress={() => onNavigate('DateTasks', { dateKey })}
+                    style={[
+                      styles.homeMiniCalendarDay,
+                      hasTasks && styles.homeMiniCalendarDayHasTasks,
+                      isToday && styles.homeMiniCalendarDayToday,
+                    ]}
+                  >
+                    <View style={styles.homeMiniCalendarDayInner}>
+                      <Text
+                        style={[
+                          styles.homeMiniCalendarDayText,
+                          hasTasks && styles.homeMiniCalendarDayTextHasTasks,
+                          isToday && styles.homeMiniCalendarDayTextToday,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                      {hasTasks && <View style={styles.homeMiniCalendarDot} />}
+                    </View>
+                  </TouchableRipple>
+                );
+              })}
+            </View>
+          </View>
+
           {tasks.length > 0 && (
             <>
-              <TextInput
-                mode="outlined"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                style={[
-                  styles.searchInput,
-                  { backgroundColor: palette.surfaceAlt },
-                ]}
-                textColor={palette.textPrimary}
-                outlineColor={palette.border}
-                activeOutlineColor="#4F46E5"
-                placeholder="Search tasks, category, priority"
-                placeholderTextColor="#94A3B8"
-              />
-
-              <View style={[styles.filterRow, styles.filterRowGrid]}>
-                <View style={styles.filterSelectWrap}>
-                  <Menu
-                    visible={showFilterDropdown}
-                    anchorPosition="bottom"
-                    onDismiss={closeFilterPopups}
-                    anchor={
-                      <TouchableRipple
-                        onPress={() => {
-                          setShowFilterDropdown(prev => !prev);
-                          setShowPriorityDropdown(false);
-                          setShowCategoryDropdown(false);
-                        }}
-                        style={[
-                          styles.filterSelectButton,
-                          {
-                            backgroundColor: palette.surfaceAlt,
-                            borderColor: palette.border,
-                          },
-                        ]}
-                      >
-                        <View style={styles.filterSelectRow}>
-                          <Text
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                            style={[
-                              styles.filterSelectLabel,
-                              { color: palette.textPrimary },
-                            ]}
-                          >
-                            Filter: {activeFilter}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.filterSelectArrow,
-                              { color: palette.textSecondary },
-                            ]}
-                          >
-                            {showFilterDropdown ? '▴' : '▾'}
-                          </Text>
-                        </View>
-                      </TouchableRipple>
-                    }
-                    contentStyle={[
-                      styles.filterDropdown,
-                      {
-                        backgroundColor: palette.surfaceAlt,
-                        borderColor: palette.border,
-                      },
-                    ]}
-                  >
-                    {filterOptions.map(option => {
-                      const isActive = activeFilter === option.key;
-
-                      return (
-                        <Menu.Item
-                          key={option.key}
-                          onPress={() => {
-                            setActiveFilter(option.key);
-                            setShowFilterDropdown(false);
-                          }}
-                          title={option.label}
-                          titleStyle={[
-                            styles.filterDropdownOptionText,
-                            isActive && styles.filterDropdownOptionTextActive,
-                          ]}
-                        />
-                      );
-                    })}
-                  </Menu>
-                </View>
-
-                <View style={styles.filterSelectWrap}>
-                  <Menu
-                    visible={showPriorityDropdown}
-                    anchorPosition="bottom"
-                    onDismiss={closeFilterPopups}
-                    anchor={
-                      <TouchableRipple
-                        onPress={() => {
-                          setShowPriorityDropdown(prev => !prev);
-                          setShowFilterDropdown(false);
-                          setShowCategoryDropdown(false);
-                        }}
-                        style={[
-                          styles.filterSelectButton,
-                          {
-                            backgroundColor: palette.surfaceAlt,
-                            borderColor: palette.border,
-                          },
-                        ]}
-                      >
-                        <View style={styles.filterSelectRow}>
-                          <Text
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                            style={[
-                              styles.filterSelectLabel,
-                              { color: palette.textPrimary },
-                            ]}
-                          >
-                            Priority: {activePriorityFilter}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.filterSelectArrow,
-                              { color: palette.textSecondary },
-                            ]}
-                          >
-                            {showPriorityDropdown ? '▴' : '▾'}
-                          </Text>
-                        </View>
-                      </TouchableRipple>
-                    }
-                    contentStyle={[
-                      styles.filterDropdown,
-                      {
-                        backgroundColor: palette.surfaceAlt,
-                        borderColor: palette.border,
-                      },
-                    ]}
-                  >
-                    {priorityFilterOptions.map(option => {
-                      const isActive = activePriorityFilter === option.key;
-
-                      return (
-                        <Menu.Item
-                          key={`priority-${option.key}`}
-                          onPress={() => {
-                            setActivePriorityFilter(option.key);
-                            setShowPriorityDropdown(false);
-                          }}
-                          title={option.label}
-                          titleStyle={[
-                            styles.filterDropdownOptionText,
-                            isActive && styles.filterDropdownOptionTextActive,
-                          ]}
-                        />
-                      );
-                    })}
-                  </Menu>
-                </View>
-
-                <View style={styles.filterSelectWrap}>
-                  <Menu
-                    visible={showCategoryDropdown}
-                    anchorPosition="bottom"
-                    onDismiss={closeFilterPopups}
-                    anchor={
-                      <TouchableRipple
-                        onPress={() => {
-                          setShowCategoryDropdown(prev => !prev);
-                          setShowFilterDropdown(false);
-                          setShowPriorityDropdown(false);
-                        }}
-                        style={[
-                          styles.filterSelectButton,
-                          {
-                            backgroundColor: palette.surfaceAlt,
-                            borderColor: palette.border,
-                          },
-                        ]}
-                      >
-                        <View style={styles.filterSelectRow}>
-                          <Text
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                            style={[
-                              styles.filterSelectLabel,
-                              { color: palette.textPrimary },
-                            ]}
-                          >
-                            Category: {activeCategoryFilter}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.filterSelectArrow,
-                              { color: palette.textSecondary },
-                            ]}
-                          >
-                            {showCategoryDropdown ? '▴' : '▾'}
-                          </Text>
-                        </View>
-                      </TouchableRipple>
-                    }
-                    contentStyle={[
-                      styles.filterDropdown,
-                      {
-                        backgroundColor: palette.surfaceAlt,
-                        borderColor: palette.border,
-                      },
-                    ]}
-                  >
-                    {categoryFilterOptions.map(option => {
-                      const isActive = activeCategoryFilter === option.key;
-
-                      return (
-                        <Menu.Item
-                          key={`category-${option.key}`}
-                          onPress={() => {
-                            setActiveCategoryFilter(option.key);
-                            setShowCategoryDropdown(false);
-                          }}
-                          title={option.label}
-                          titleStyle={[
-                            styles.filterDropdownOptionText,
-                            isActive && styles.filterDropdownOptionTextActive,
-                          ]}
-                        />
-                      );
-                    })}
-                  </Menu>
-                </View>
-              </View>
-
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.taskSectionsContent}
@@ -1624,6 +1444,189 @@ function HomeScreen({
         </SafeAreaView>
       </LinearGradient>
     </>
+  );
+}
+
+function DateTasksScreen({
+  tasks,
+  selectedDateKey,
+  onToggleTask,
+  onDeleteTask,
+  onNavigate,
+  palette,
+}: DateTasksScreenProps) {
+  const tasksForDate = React.useMemo(() => {
+    return tasks
+      .filter(task => (task.date ?? selectedDateKey) === selectedDateKey)
+      .sort((a, b) => {
+        const aTime =
+          parseTaskDateTime(a, Date.now())?.getTime() ??
+          Number.MAX_SAFE_INTEGER;
+        const bTime =
+          parseTaskDateTime(b, Date.now())?.getTime() ??
+          Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+      });
+  }, [selectedDateKey, tasks]);
+
+  return (
+    <LinearGradient
+      colors={palette.gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.flex1}
+    >
+      <AppBackgroundDecor palette={palette} />
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.dateTasksHeaderWrap}>
+          <TouchableRipple
+            onPress={() => onNavigate('Home')}
+            style={styles.dateTasksBackButton}
+          >
+            <Text style={styles.dateTasksBackText}>← Back</Text>
+          </TouchableRipple>
+          <Text style={[styles.dateTasksTitle, { color: palette.textPrimary }]}>
+            {formatTaskDateLabel(selectedDateKey)}
+          </Text>
+          <Text
+            style={[styles.dateTasksSubtitle, { color: palette.textSecondary }]}
+          >
+            {tasksForDate.length} task{tasksForDate.length === 1 ? '' : 's'}
+          </Text>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.dateTasksListContent}
+        >
+          {tasksForDate.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📭</Text>
+              <Text
+                variant="headlineSmall"
+                style={[styles.emptyTitle, { color: palette.textPrimary }]}
+              >
+                No tasks on this date
+              </Text>
+            </View>
+          ) : (
+            tasksForDate.map(task => {
+              const isDone = task.completed;
+              const dateTimeLabel = task.time
+                ? `⏰ ${formatTaskTime(task.time)}`
+                : 'No reminder';
+
+              return (
+                <Card
+                  key={task.id}
+                  style={[
+                    styles.dateTasksCard,
+                    {
+                      backgroundColor: palette.surfaceAlt,
+                      borderColor: palette.border,
+                    },
+                    isDone && styles.cardCompleted,
+                  ]}
+                >
+                  <Card.Content style={styles.dateTasksCardContent}>
+                    <View style={styles.dateTasksCardTop}>
+                      <Text
+                        style={[
+                          styles.dateTasksCardTitle,
+                          { color: palette.textPrimary },
+                          isDone && styles.completedText,
+                        ]}
+                      >
+                        {task.title}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          isDone
+                            ? styles.statusBadgeDone
+                            : styles.statusBadgeLive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            isDone
+                              ? styles.statusBadgeTextDone
+                              : styles.statusBadgeTextLive,
+                          ]}
+                        >
+                          {isDone ? 'Done' : 'Live'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {!!task.description && (
+                      <Text
+                        style={[
+                          styles.dateTasksCardDescription,
+                          { color: palette.textSecondary },
+                          isDone && styles.completedDescription,
+                        ]}
+                      >
+                        {task.description}
+                      </Text>
+                    )}
+
+                    <Text
+                      style={[
+                        styles.dateTasksCardTime,
+                        { color: palette.textSecondary },
+                        isDone && styles.completedDescription,
+                      ]}
+                    >
+                      {dateTimeLabel}
+                    </Text>
+
+                    <View style={styles.dateTasksActionsRow}>
+                      <TouchableRipple
+                        onPress={() => onToggleTask(task.id)}
+                        style={styles.actionButtonWrap}
+                        borderless
+                      >
+                        <LinearGradient
+                          colors={
+                            isDone
+                              ? ['#6366F1', '#818CF8']
+                              : ['#10B981', '#34D399']
+                          }
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.actionButton}
+                        >
+                          <Text style={styles.actionLabel}>
+                            {isDone ? 'Undo' : 'Done'}
+                          </Text>
+                        </LinearGradient>
+                      </TouchableRipple>
+
+                      <TouchableRipple
+                        onPress={() => onDeleteTask(task.id)}
+                        style={styles.actionButtonWrap}
+                        borderless
+                      >
+                        <LinearGradient
+                          colors={['#EF4444', '#F97316']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.actionButton}
+                        >
+                          <Text style={styles.actionLabel}>Delete</Text>
+                        </LinearGradient>
+                      </TouchableRipple>
+                    </View>
+                  </Card.Content>
+                </Card>
+              );
+            })
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -2980,6 +2983,15 @@ export default function App() {
             onNavigate={navigate}
             palette={palette}
           />
+        ) : currentScreen === 'DateTasks' ? (
+          <DateTasksScreen
+            tasks={tasks}
+            selectedDateKey={screenParams?.dateKey ?? formatDateKey(new Date())}
+            onToggleTask={toggleTask}
+            onDeleteTask={deleteTask}
+            onNavigate={navigate}
+            palette={palette}
+          />
         ) : currentScreen === 'EditTask' ? (
           <AddTaskScreen
             onAddTask={addTask}
@@ -3448,6 +3460,82 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 16,
   },
+  homeMiniCalendar: {
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 5,
+  },
+  homeMiniCalendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginBottom: 4,
+    paddingHorizontal: 1,
+  },
+  homeMiniCalendarMonthPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.25)',
+  },
+  homeMiniCalendarMonthPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  homeMiniCalendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 3,
+  },
+  homeMiniCalendarDaySpacer: {
+    width: '14.2857%',
+    aspectRatio: 1,
+  },
+  homeMiniCalendarDay: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeMiniCalendarDayHasTasks: {
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.28)',
+  },
+  homeMiniCalendarDayToday: {
+    borderWidth: 1,
+    borderColor: '#6366F1',
+  },
+  homeMiniCalendarDayInner: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 22,
+    minHeight: 22,
+  },
+  homeMiniCalendarDayText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  homeMiniCalendarDayTextHasTasks: {
+    color: '#3730A3',
+  },
+  homeMiniCalendarDayTextToday: {
+    color: '#1D4ED8',
+  },
+  homeMiniCalendarDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    marginTop: 1,
+    backgroundColor: '#4F46E5',
+  },
   filterRow: {
     gap: 6,
     paddingBottom: 0,
@@ -3610,6 +3698,72 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: 60,
+  },
+  dateTasksHeaderWrap: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  dateTasksBackButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(99, 102, 241, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.25)',
+    marginBottom: 8,
+  },
+  dateTasksBackText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#312E81',
+  },
+  dateTasksTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  dateTasksSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dateTasksListContent: {
+    paddingBottom: 110,
+    gap: 10,
+  },
+  dateTasksCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  dateTasksCardContent: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  dateTasksCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  dateTasksCardTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  dateTasksCardDescription: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  dateTasksCardTime: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dateTasksActionsRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 6,
   },
   emptyIcon: {
     fontSize: 64,
