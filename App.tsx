@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Keyboard,
   Modal,
   Platform,
@@ -478,6 +477,8 @@ function HomeScreen({
   >('All');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showLive, setShowLive] = useState(true);
+  const [showMissed, setShowMissed] = useState(true);
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>(
     {},
@@ -684,7 +685,14 @@ function HomeScreen({
     return aTimestamp - bTimestamp;
   });
 
-  const openTasks = sortedTasks.filter(task => !task.completed);
+  const liveTasks = sortedTasks.filter(task => {
+    const taskState = getTaskState(task);
+    return !task.completed && taskState.isLive;
+  });
+  const missedTasks = sortedTasks.filter(task => {
+    const taskState = getTaskState(task);
+    return !task.completed && taskState.isMissed;
+  });
   const completedTasks = sortedTasks.filter(task => task.completed);
 
   const renderItem = ({ item }: { item: Task }) => {
@@ -908,6 +916,91 @@ function HomeScreen({
             </Card.Content>
           </View>
         </Card>
+      </View>
+    );
+  };
+
+  const renderTaskSection = (
+    title: string,
+    tasksForSection: Task[],
+    visible: boolean,
+    onToggleVisible: () => void,
+  ) => {
+    if (tasksForSection.length === 0) {
+      return null;
+    }
+
+    const sectionVariant =
+      title === 'Live' ? 'live' : title === 'Missed' ? 'missed' : 'completed';
+
+    return (
+      <View style={styles.completedSection}>
+        <View
+          style={[
+            styles.completedListBox,
+            sectionVariant === 'live' && styles.liveSectionBox,
+            sectionVariant === 'missed' && styles.missedSectionBox,
+            sectionVariant === 'completed' && styles.completedSectionBox,
+            {
+              backgroundColor: palette.surfaceAlt,
+              borderColor: palette.border,
+            },
+          ]}
+        >
+          <TouchableRipple
+            onPress={onToggleVisible}
+            style={styles.completedHeader}
+          >
+            <View
+              style={[
+                styles.completedHeaderContent,
+                sectionVariant === 'live' && styles.liveHeaderContent,
+                sectionVariant === 'missed' && styles.missedHeaderContent,
+                sectionVariant === 'completed' &&
+                  styles.completedHeaderContentDefault,
+                {
+                  borderBottomColor: palette.border,
+                  backgroundColor: palette.surfaceAlt,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.completedHeaderTitle,
+                  sectionVariant === 'live' && styles.liveHeaderTitle,
+                  sectionVariant === 'missed' && styles.missedHeaderTitle,
+                  sectionVariant === 'completed' &&
+                    styles.completedHeaderTitleDefault,
+                ]}
+              >
+                {title} ({tasksForSection.length})
+              </Text>
+              <Text
+                style={[
+                  styles.completedHeaderArrow,
+                  sectionVariant === 'live' && styles.liveHeaderArrow,
+                  sectionVariant === 'missed' && styles.missedHeaderArrow,
+                  sectionVariant === 'completed' &&
+                    styles.completedHeaderArrowDefault,
+                ]}
+              >
+                {visible ? '▴' : '▾'}
+              </Text>
+            </View>
+          </TouchableRipple>
+          {visible && (
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              style={styles.completedListScroll}
+              contentContainerStyle={styles.completedListContent}
+            >
+              {tasksForSection.map(task => (
+                <View key={task.id}>{renderItem({ item: task })}</View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </View>
     );
   };
@@ -1458,105 +1551,55 @@ function HomeScreen({
                 </View>
               </ScrollView>
 
-              {completedTasks.length > 0 && (
-                <View style={styles.completedSection}>
-                  <View
-                    style={[
-                      styles.completedListBox,
-                      {
-                        backgroundColor: palette.surfaceAlt,
-                        borderColor: palette.border,
-                      },
-                    ]}
-                  >
-                    <TouchableRipple
-                      onPress={() => setShowCompleted(prev => !prev)}
-                      style={styles.completedHeader}
-                    >
-                      <View
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.taskSectionsContent}
+              >
+                {renderTaskSection('Live', liveTasks, showLive, () =>
+                  setShowLive(prev => !prev),
+                )}
+                {renderTaskSection('Missed', missedTasks, showMissed, () =>
+                  setShowMissed(prev => !prev),
+                )}
+                {renderTaskSection(
+                  'Completed',
+                  completedTasks,
+                  showCompleted,
+                  () => setShowCompleted(prev => !prev),
+                )}
+
+                {liveTasks.length === 0 &&
+                  missedTasks.length === 0 &&
+                  completedTasks.length === 0 && (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyIcon}>📭</Text>
+                      <Text
+                        variant="headlineSmall"
                         style={[
-                          styles.completedHeaderContent,
-                          {
-                            borderBottomColor: palette.border,
-                            backgroundColor: palette.surfaceAlt,
-                          },
+                          styles.emptyTitle,
+                          { color: palette.textPrimary },
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.completedHeaderTitle,
-                            { color: palette.textPrimary },
-                          ]}
-                        >
-                          Completed ({completedTasks.length})
-                        </Text>
-                        <Text
-                          style={[
-                            styles.completedHeaderArrow,
-                            { color: palette.textSecondary },
-                          ]}
-                        >
-                          {showCompleted ? '▴' : '▾'}
-                        </Text>
-                      </View>
-                    </TouchableRipple>
-                    {showCompleted && (
-                      <ScrollView
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator
-                        style={styles.completedListScroll}
-                        contentContainerStyle={styles.completedListContent}
+                        {tasks.length === 0
+                          ? 'No tasks yet'
+                          : 'No matching tasks'}
+                      </Text>
+                      <Text
+                        variant="bodyMedium"
+                        style={[
+                          styles.emptySubtitle,
+                          { color: palette.textSecondary },
+                        ]}
                       >
-                        {completedTasks.map(task => (
-                          <View key={task.id}>
-                            {renderItem({ item: task })}
-                          </View>
-                        ))}
-                      </ScrollView>
-                    )}
-                  </View>
-                </View>
-              )}
+                        {tasks.length === 0
+                          ? 'Tap the + button to create your first task!'
+                          : 'Try a different filter to see more tasks.'}
+                      </Text>
+                    </View>
+                  )}
+              </ScrollView>
             </>
           )}
-
-          <FlatList
-            data={openTasks}
-            keyExtractor={item => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={[
-              styles.listContent,
-              openTasks.length === 0 &&
-                completedTasks.length === 0 &&
-                styles.emptyListContent,
-            ]}
-            scrollEnabled
-            nestedScrollEnabled
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyIcon}>📭</Text>
-                <Text
-                  variant="headlineSmall"
-                  style={[styles.emptyTitle, { color: palette.textPrimary }]}
-                >
-                  {tasks.length === 0
-                    ? 'No tasks yet'
-                    : 'No matching open tasks'}
-                </Text>
-                <Text
-                  variant="bodyMedium"
-                  style={[
-                    styles.emptySubtitle,
-                    { color: palette.textSecondary },
-                  ]}
-                >
-                  {tasks.length === 0
-                    ? 'Tap the + button to create your first task!'
-                    : 'Try a different filter to see more tasks.'}
-                </Text>
-              </View>
-            }
-          />
 
           <TouchableRipple
             onPress={() => onNavigate('AddTask')}
@@ -3364,9 +3407,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   filterRow: {
-    gap: 8,
+    gap: 6,
     paddingBottom: 0,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
     alignItems: 'center',
     overflow: 'visible',
   },
@@ -3375,7 +3418,7 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     flexGrow: 0,
-    marginBottom: 8,
+    marginBottom: 6,
     overflow: 'visible',
   },
   filterSelectWrap: {
@@ -3383,13 +3426,15 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 30,
     elevation: 30,
+    alignSelf: 'flex-start',
   },
   filterSelectButton: {
     borderRadius: 14,
     borderWidth: 1,
-    minHeight: 40,
+    minWidth: 118,
+    minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
   filterSelectRow: {
     flexDirection: 'row',
@@ -3397,17 +3442,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   filterSelectLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   filterSelectArrow: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   filterDropdown: {
     marginTop: 6,
     borderRadius: 14,
     borderWidth: 1,
+    minWidth: 160,
     overflow: 'hidden',
     zIndex: 40,
     elevation: 12,
@@ -3421,7 +3467,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF2FF',
   },
   filterDropdownOptionText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
@@ -3490,6 +3536,10 @@ const styles = StyleSheet.create({
   },
   sortChipTextInactive: {
     color: '#64748B',
+  },
+  taskSectionsContent: {
+    paddingBottom: 100,
+    gap: 12,
   },
   listContent: {
     paddingTop: 0,
@@ -3683,6 +3733,18 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 1,
   },
+  liveSectionBox: {
+    borderColor: '#86EFAC',
+    backgroundColor: 'rgba(240, 253, 244, 0.98)',
+  },
+  missedSectionBox: {
+    borderColor: '#FCA5A5',
+    backgroundColor: 'rgba(254, 242, 242, 0.98)',
+  },
+  completedSectionBox: {
+    borderColor: '#CBD5E1',
+    backgroundColor: 'rgba(248, 250, 252, 0.98)',
+  },
   completedSortWrap: {
     alignItems: 'flex-end',
     marginBottom: 8,
@@ -3722,13 +3784,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
   },
+  liveHeaderContent: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  missedHeaderContent: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+  },
+  completedHeaderContentDefault: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#64748B',
+  },
   completedHeaderTitle: {
     fontSize: 14,
     fontWeight: '800',
   },
+  liveHeaderTitle: {
+    color: '#047857',
+  },
+  missedHeaderTitle: {
+    color: '#B91C1C',
+  },
+  completedHeaderTitleDefault: {
+    color: '#334155',
+  },
   completedHeaderArrow: {
     fontSize: 14,
     fontWeight: '800',
+  },
+  liveHeaderArrow: {
+    color: '#10B981',
+  },
+  missedHeaderArrow: {
+    color: '#EF4444',
+  },
+  completedHeaderArrowDefault: {
+    color: '#64748B',
   },
   checkboxBox: {
     width: 24,
