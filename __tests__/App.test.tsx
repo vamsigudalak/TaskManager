@@ -17,32 +17,32 @@ describe('Todo App core flows', () => {
     jest.useRealTimers();
   });
 
-  test('loads home screen and interactive filter controls', async () => {
+  test('loads home screen and routes from calendar date tap', async () => {
     const screen = render(<App />);
 
     await act(async () => {
       jest.advanceTimersByTime(2600);
     });
 
-    expect(screen.getByText('Daily Taasks')).toBeTruthy();
+    expect(screen.getByText('Task Manager')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
+    expect(screen.getByTestId('home-calendar-month-label')).toBeTruthy();
 
-    fireEvent.press(screen.getByText('+'));
-    fireEvent.changeText(
-      screen.getByPlaceholderText('What needs to be done?'),
-      'Filter visibility task',
-    );
-    fireEvent.press(screen.getByText('Create'));
-
-    await waitFor(() => {
-      expect(
-        screen.getByPlaceholderText('Search tasks, category, priority'),
-      ).toBeTruthy();
+    const now = new Date();
+    const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      '0',
+    )}-${String(now.getDate()).padStart(2, '0')}`;
+    const dateLabel = now.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
     });
 
-    fireEvent.press(screen.getByText('Filter: All'));
-    const missedLabels = screen.getAllByText('Missed');
-    fireEvent.press(missedLabels[missedLabels.length - 1]);
-    expect(screen.getByText('Filter: Missed')).toBeTruthy();
+    fireEvent.press(screen.getByTestId(`home-calendar-day-${dateKey}`));
+
+    await waitFor(() => {
+      expect(screen.getByText(dateLabel)).toBeTruthy();
+    });
   });
 
   test('adds a new task through inputs and create button', async () => {
@@ -52,7 +52,7 @@ describe('Todo App core flows', () => {
       jest.advanceTimersByTime(2600);
     });
 
-    fireEvent.press(screen.getByText('+'));
+    fireEvent.press(screen.getByTestId('home-add-task-button'));
     expect(screen.getByText('New Task')).toBeTruthy();
 
     fireEvent.changeText(
@@ -65,6 +65,31 @@ describe('Todo App core flows', () => {
     );
 
     fireEvent.press(screen.getByText('Create'));
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const now = new Date();
+    if (
+      tomorrow.getMonth() !== now.getMonth() ||
+      tomorrow.getFullYear() !== now.getFullYear()
+    ) {
+      fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
+      fireEvent.press(screen.getByTestId('home-calendar-next-month'));
+    } else {
+      fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
+    }
+
+    const tomorrowKey = `${tomorrow.getFullYear()}-${String(
+      tomorrow.getMonth() + 1,
+    ).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(`home-calendar-day-${tomorrowKey}`),
+      ).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId(`home-calendar-day-${tomorrowKey}`));
 
     await waitFor(() => {
       expect(screen.getByText('Write regression tests')).toBeTruthy();
