@@ -25,8 +25,7 @@ describe('Todo App core flows', () => {
     });
 
     expect(screen.getByText('Task Manager')).toBeTruthy();
-
-    expect(screen.getByTestId('home-calendar-card')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
     expect(screen.getByTestId('home-calendar-month-label')).toBeTruthy();
 
     const now = new Date();
@@ -53,7 +52,7 @@ describe('Todo App core flows', () => {
       jest.advanceTimersByTime(2600);
     });
 
-    fireEvent.press(screen.getByText('+'));
+    fireEvent.press(screen.getByTestId('home-add-task-button'));
     expect(screen.getByText('New Task')).toBeTruthy();
 
     fireEvent.changeText(
@@ -74,7 +73,10 @@ describe('Todo App core flows', () => {
       tomorrow.getMonth() !== now.getMonth() ||
       tomorrow.getFullYear() !== now.getFullYear()
     ) {
+      fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
       fireEvent.press(screen.getByTestId('home-calendar-next-month'));
+    } else {
+      fireEvent.press(screen.getByTestId('home-calendar-open-modal'));
     }
 
     const tomorrowKey = `${tomorrow.getFullYear()}-${String(
